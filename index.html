@@ -3,90 +3,263 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>WebGPU Particle Life + Sound‑Wave Beacons</title>
+  <title>WebGPU Particle-Life + Sound-Wave Beacons (Configurable)</title>
   <style>
-    body { margin:0; background:#000; overflow:hidden; position:relative; }
+    body   { margin:0; background:#000; overflow:hidden; position:relative; color:#ddd; font-family:system-ui; }
     canvas { display:block; }
-    #overlay { position:absolute; top:0; left:0; pointer-events:none; }
+    #overlay   { position:absolute; top:0; left:0; pointer-events:none; }
+    #setupMask { position:fixed; inset:0; background:#000d; display:flex; align-items:center; justify-content:center; }
   </style>
 </head>
 <body>
-  <!-- particle framebuffer -->
-  <canvas id="sim"     width="1024" height="512"></canvas>
-  <!-- overlay for beacon gizmos + selection box -->
-  <canvas id="overlay" width="1024" height="512"></canvas>
+  <!-- Off-canvas until simulation starts -->
+  <canvas id="sim"     width="1024" height="512" style="display:none"></canvas>
+  <canvas id="overlay" width="1024" height="512" style="display:none"></canvas>
+
+  <!-- Setup screen -->
+  <div id="setupMask"></div>
 
   <script type="module">
-    /*  ----------------------------------------------------------------------
-        MAY‑2025 ENHANCEMENTS
-        ‑ Ctrl‑click beacons to multi‑select a *group*.
-        ‑ Click‑drag in empty space draws a *selection box* to multi‑select.
-        ‑ Click‑drag on any *member of a selected group* moves the ENTIRE group.
-        ‑ Right‑click a selected group opens a *Group Panel*:
-            ▸ Move into geometric layouts (horizontal / vertical line, circle, hexagon)
-            ▸ Batch‑edit parameters (freq / amp / decay) for all beacons in the group
-        ------------------------------------------------------------------- */
+  import GUI from 'https://cdn.jsdelivr.net/npm/lil-gui@0.19.1/dist/lil-gui.esm.min.js';
 
-    import GUI from 'https://cdn.jsdelivr.net/npm/lil-gui@0.19.1/dist/lil-gui.esm.min.js';
+  /********************************************************************
+   * 1.  PRE-SIMULATION SETUP PANEL
+   ********************************************************************/
+  const mask   = document.getElementById('setupMask');
+  const stored = localStorage.getItem('particleSimSave');
 
-    /* ────────── feature check ────────── */
+  /* ---------- helpers -------------------------------------------------- */
+  const tryStart = jsonTxt => {
+    try {
+      const cfg = JSON.parse(jsonTxt);
+      // strip helper keys that begin with “_”
+      Object.keys(cfg).forEach(k => { if (k.startsWith('_')) delete cfg[k]; });
+      startSim(cfg);
+    } catch (err) {
+      alert('❌  Could not parse JSON:\n' + err.message);
+      console.error(err);
+    }
+  };
+
+  async function importFile () {
+    const input = document.createElement('input');
+    input.type  = 'file';
+    input.accept = 'application/json';
+    input.click();
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      file.text().then(tryStart);
+    };
+  }
+
+  function pasteJSON () {
+    const txt = prompt('Paste your save JSON here:');
+    if (txt) tryStart(txt);
+  }
+
+  /* ---------- pre-launch config object --------------------------------- */
+  const setup  = {
+    particleCount : 65_536,
+    kindCount     : 2,
+    preset        : 'Random',          // Random | Sand
+    loadSaved     : () => stored && startSim(JSON.parse(stored)),
+    importFile,
+    pasteJSON,
+    launch        : () => startSim({
+                      particleCount : setup.particleCount,
+                      kindCount     : setup.kindCount,
+                      preset        : setup.preset
+                    })
+  };
+
+  /* ---------- lil-gui panel ------------------------------------------- */
+  const preGUI = new GUI({ width: 300, container: mask });
+  preGUI.title('Simulation Setup');
+
+  preGUI.add(setup,'particleCount',1024,131072,1024).name('# Particles');
+  preGUI.add(setup,'kindCount',1,6,1).name('# Kinds');
+  preGUI.add(setup,'preset',['Random','Sand']).name('Preset');
+  if (stored) preGUI.add(setup,'loadSaved').name('📂 Load Previous');
+  preGUI.add(setup,'importFile').name('📁 Import File');
+  preGUI.add(setup,'pasteJSON').name('📝 Paste JSON');
+  preGUI.add(setup,'launch').name('🚀 Launch');
+
+  /*********************************************************************
+   * 2.  START SIMULATION (async)
+   *********************************************************************/
+  async function startSim(cfg){
+    /* ---------------------------------------------------------------
+       Destroy setup UI & unmask canvases
+    --------------------------------------------------------------- */
+    preGUI.destroy(); mask.remove();
+    const canvas  = document.getElementById('sim');
+    const oCanvas = document.getElementById('overlay');
+    canvas.style.display = oCanvas.style.display = 'block';
+
+    /* ---------------------------------------------------------------
+       Normalise config (handle save‑restore cases)
+    --------------------------------------------------------------- */
+    const particleCount = cfg.particleCount ?? 65536;
+    const kindCount     = cfg.kindCount     ?? 2;
+    const preset        = cfg.preset        ?? 'Random';
+
+    /* ---------------------------------------------------------------
+       2.1  GPU device
+    --------------------------------------------------------------- */
     if (!navigator.gpu) { alert('WebGPU not enabled'); throw new Error('WebGPU unavailable'); }
-
-    /* ────────── device/queue ─────────── */
     const adapter = await navigator.gpu.requestAdapter();
     const device  = await adapter.requestDevice();
     const queue   = device.queue;
 
-    /* ────────── constants ────────────── */
-    const particleCount = 1<<16;
-    const kindCount     = 5;
-    const domain        = { w:1024, h:512 };
+    /* ---------------------------------------------------------------
+       2.2  Domain + GUI (runtime controls)
+    --------------------------------------------------------------- */
+    const domain  = { w: 1024, h: 512 };
+    const simParams = cfg.simParams ?? { dt: 0.2, friction: 0.995 };
 
-    const MAX_BEACONS   = 16;
-    const B_STRIDE      = 8;                  // f32 per beacon
-    const beaconBytes   = MAX_BEACONS*B_STRIDE*4;
+    const runtimeGUI = new GUI();
+    runtimeGUI.add(simParams,'dt',0.02,1,0.01);
+    runtimeGUI.add(simParams,'friction',0.1,1,0.0005);
 
-    /* ────────── GUI ──────────────────── */
-    const simParams = { dt:0.2, friction:0.995 };
-    const tpl = { freq:1, amp:2, decay:1, add:addBeacon };
-
-    const gui = new GUI();
-    gui.add(simParams,'dt',0.02,1,0.01);
-    gui.add(simParams,'friction',0.1,1,0.0005);
-
-    /* ────────── particles init ──────── */
+    /* ---------------------------------------------------------------
+       2.3  Particle buffers
+    --------------------------------------------------------------- */
     const P_STRIDE = 5;
-    const pBytes = particleCount*P_STRIDE*4;
-    const pInit  = new Float32Array(pBytes/4);
-    for(let i=0,o=0;i<particleCount;++i,o+=P_STRIDE){
-      pInit[o]  = Math.random()*domain.w;
-      pInit[o+1]= Math.random()*domain.h;
-      pInit[o+2]= (Math.random()-0.5)*2;
-      pInit[o+3]= (Math.random()-0.5)*2;
-      pInit[o+4]= Math.floor(Math.random()*kindCount);
+    const pBytes   = particleCount*P_STRIDE*4;
+    const pInit    = new Float32Array(pBytes/4);
+
+    // Either restore saved positions or random scatter
+    if(cfg.particles){ pInit.set(cfg.particles); }
+    else {
+      for(let i=0,o=0;i<particleCount;++i,o+=P_STRIDE){
+        pInit[o  ] = Math.random()*domain.w;
+        pInit[o+1] = Math.random()*domain.h;
+        pInit[o+2] = (Math.random()-0.5)*2;
+        pInit[o+3] = (Math.random()-0.5)*2;
+        pInit[o+4] = Math.floor(Math.random()*kindCount);
+      }
     }
 
     const bufA = device.createBuffer({size:pBytes,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.VERTEX|GPUBufferUsage.COPY_DST});
     const bufB = device.createBuffer({size:pBytes,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.VERTEX});
     queue.writeBuffer(bufA,0,pInit);
 
-    /* forces */
-    const fData=new Float32Array(kindCount*kindCount*2);
-    for(let a=0;a<kindCount;++a)for(let b=0;b<kindCount;++b){const i=(a*kindCount+b)*2;fData[i]=20+Math.random()*40;fData[i+1]=(Math.random()*2-1)*0.5;}
-    const fBuf=device.createBuffer({size:fData.byteLength,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
+    /* ---------------------------------------------------------------
+       2.4  Attraction / Repulsion table
+    --------------------------------------------------------------- */
+    function buildTable(kindCount,preset){
+      const arr = new Float32Array(kindCount*kindCount*2);
+      for(let a=0;a<kindCount;++a){
+        for(let b=0;b<kindCount;++b){
+          const i=(a*kindCount+b)*2;
+          arr[i]   = 20 + Math.random()*40;       // radius
+          arr[i+1] = preset==='Sand' ? 0 : (Math.random()*2-1)*0.5; // strength
+        }
+      }
+      return arr;
+    }
+    const fData = cfg.forces ? new Float32Array(cfg.forces) : buildTable(kindCount,preset);
+    const fBuf  = device.createBuffer({size:fData.byteLength,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
     queue.writeBuffer(fBuf,0,fData);
 
-    /* uniforms & beacons */
-    const uBuf=device.createBuffer({size:32,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
-    const beaconArr=new Float32Array(beaconBytes/4);
-    const beaconBuf=device.createBuffer({size:beaconBytes,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
+    /* ---------------------------------------------------------------
+       2.5  Beacon store (position + params)
+    --------------------------------------------------------------- */
+    const MAX_BEACONS = 16;
+    const B_STRIDE    = 8;
+    const beaconBytes = MAX_BEACONS*B_STRIDE*4;
+    const beaconArr   = new Float32Array(beaconBytes/4);
 
+    let beaconCount = cfg.beaconCount ?? 0;
+    if(cfg.beacons){ beaconArr.set(cfg.beacons,0); }
+
+    const beaconBuf = device.createBuffer({size:beaconBytes,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
+    queue.writeBuffer(beaconBuf,0,beaconArr);
+
+    /* ---------------------------------------------------------------
+       2.6  Uniforms
+    --------------------------------------------------------------- */
+    const uBuf = device.createBuffer({size:32,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
     let simTime=0;
-    function updUniform(bc){ queue.writeBuffer(uBuf,0,new Float32Array([simParams.dt,simParams.friction,domain.w,domain.h,simTime,bc,0,0])); }
-    const uploadBeacons=()=>queue.writeBuffer(beaconBuf,0,beaconArr);
+    const updUniform = bc=>{
+      queue.writeBuffer(uBuf,0,new Float32Array([simParams.dt,simParams.friction,domain.w,domain.h,simTime,bc,0,0]));
+    };
 
-    /* ────────── beacon helpers ─────── */
-    let beaconCount=0;
+    /* ---------------------------------------------------------------
+       2.7  Shaders (template‑generated)
+    --------------------------------------------------------------- */
+    const compCode = `struct P{ x:f32,y:f32,vx:f32,vy:f32,kind:f32 };
+struct F{radius:f32,strength:f32};
+struct S{dt:f32,friction:f32,w:f32,h:f32,t:f32,bc:f32,_0:f32,_1:f32};
+struct B{ x:f32,y:f32,f:f32,a:f32,d:f32,_0:f32,_1:f32,_2:f32};
+@group(0)@binding(0)var<storage,read>src:array<P>;
+@group(0)@binding(1)var<storage,read_write>dst:array<P>;
+@group(0)@binding(2)var<storage,read>tbl:array<F>;
+@group(1)@binding(0)var<uniform>sim:S;
+@group(2)@binding(0)var<storage,read>be:array<B,${MAX_BEACONS}>;
+const TAU=6.2831853; const C=100.0;
+@compute @workgroup_size(256)fn main(@builtin(global_invocation_id)gid:vec3<u32>){
+  let i=gid.x; if(i>=arrayLength(&src)){return;}
+  var p=src[i]; var a=vec2<f32>(0.0);
+  let kinds=${kindCount}u;
+  for(var j:u32=0u;j<arrayLength(&src);j++){
+    if(i==j){continue;}
+    let q=src[j]; let d=vec2<f32>(q.x-p.x,q.y-p.y); let r=length(d);
+    if(r<1e-3){continue;}
+    let fp=tbl[u32(p.kind)*kinds+u32(q.kind)];
+    if(r<fp.radius){ a+=normalize(d)*fp.strength*(1.0-r/fp.radius);} }
+  let bc=u32(sim.bc);
+  for(var k:u32=0u;k<bc;k++){
+    let b=be[k]; let d=vec2<f32>(p.x-b.x,p.y-b.y); let r=length(d);
+    if(r<1e-3){continue;}
+    let press=b.a*sin(TAU*b.f*(sim.t-r/C))/pow(r+1.0,b.d);
+    a+=normalize(d)*press; }
+  p.vx=(p.vx+a.x*sim.dt)*sim.friction; p.vy=(p.vy+a.y*sim.dt)*sim.friction;
+  p.x+=p.vx*sim.dt; p.y+=p.vy*sim.dt;
+  if(p.x<0.0){p.x=0.0;p.vx=-p.vx;} if(p.x>sim.w){p.x=sim.w;p.vx=-p.vx;}
+  if(p.y<0.0){p.y=0.0;p.vy=-p.vy;} if(p.y>sim.h){p.y=sim.h;p.vy=-p.vy;}
+  dst[i]=p; }`;
+
+    const vert = `struct P{ x:f32,y:f32,vx:f32,vy:f32,kind:f32 };
+@group(0)@binding(0)var<storage,read>ps:array<P>;
+struct O{@builtin(position)pos:vec4<f32>,@location(0)kind:f32};
+@vertex fn vs(@builtin(vertex_index)id:u32)->O{
+  let p=ps[id]; var o:O;
+  o.pos=vec4<f32>((p.x/${domain.w}.0)*2.0-1.0, 1.0-(p.y/${domain.h}.0)*2.0,0,1);
+  o.kind=p.kind; return o;}
+fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-abs(h*6.0-2.0),0,1); let b=clamp(2.0-abs(h*6.0-4.0),0,1); return vec3<f32>(r,g,b);}
+@fragment fn fs(i:O)->@location(0)vec4<f32>{ let c=hue(i.kind/${kindCount}.0); return vec4<f32>(c,1);} `;
+
+    /* ---------------------------------------------------------------
+       2.8  Pipelines & bind groups (identical logic)
+    --------------------------------------------------------------- */
+    const compPipe=device.createComputePipeline({layout:device.createPipelineLayout({
+      bindGroupLayouts:[device.createBindGroupLayout({entries:[{binding:0,visibility:4,buffer:{type:'read-only-storage'}},{binding:1,visibility:4,buffer:{type:'storage'}},{binding:2,visibility:4,buffer:{type:'read-only-storage'}}]}),
+                        device.createBindGroupLayout({entries:[{binding:0,visibility:4,buffer:{type:'uniform'}}]}),
+                        device.createBindGroupLayout({entries:[{binding:0,visibility:4,buffer:{type:'read-only-storage'}}]})]}),
+      compute:{module:device.createShaderModule({code:compCode}),entryPoint:'main'}});
+
+    const rPipe=device.createRenderPipeline({layout:device.createPipelineLayout({bindGroupLayouts:[device.createBindGroupLayout({entries:[{binding:0,visibility:1,buffer:{type:'read-only-storage'}}]})]}),vertex:{module:device.createShaderModule({code:vert}),entryPoint:'vs'},fragment:{module:device.createShaderModule({code:vert}),entryPoint:'fs',targets:[{format:navigator.gpu.getPreferredCanvasFormat()}]},primitive:{topology:'point-list'}});
+
+    const compBG_A=device.createBindGroup({layout:compPipe.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:bufA}},{binding:1,resource:{buffer:bufB}},{binding:2,resource:{buffer:fBuf}}]});
+    const compBG_B=device.createBindGroup({layout:compPipe.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:bufB}},{binding:1,resource:{buffer:bufA}},{binding:2,resource:{buffer:fBuf}}]});
+    const simBG   =device.createBindGroup({layout:compPipe.getBindGroupLayout(1),entries:[{binding:0,resource:{buffer:uBuf}}]});
+    const beaconBG=device.createBindGroup({layout:compPipe.getBindGroupLayout(2),entries:[{binding:0,resource:{buffer:beaconBuf}}]});
+    const rBG_A   =device.createBindGroup({layout:rPipe.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:bufA}}]});
+    const rBG_B   =device.createBindGroup({layout:rPipe.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:bufB}}]});
+
+    /* ---------------------------------------------------------------
+       2.9  Canvas & overlay contexts
+    --------------------------------------------------------------- */
+    const ctx  = canvas.getContext('webgpu');
+    ctx.configure({device,format:navigator.gpu.getPreferredCanvasFormat(),alphaMode:'opaque'});
+    const octx = oCanvas.getContext('2d');
+
+    /* ---------------------------------------------------------------
+       2.10  Beacon helpers (copy / add / delete etc.)
+    --------------------------------------------------------------- */
+    const uploadBeacons=()=>queue.writeBuffer(beaconBuf,0,beaconArr);
     const DEFAULTS = { freq: 1.0, amp: 100.0, decay: 0.1 };
 
     function createBeacon (i, x, y, freq = DEFAULTS.freq, amp = DEFAULTS.amp, decay = DEFAULTS.decay) {
@@ -124,44 +297,6 @@
     }
 
     function addBeacon(){ placing=true; }
-
-    /* ────────── shaders (omitted for brevity: identical to prior version) ────────────── */
-    const compCode=`struct P{ x:f32,y:f32,vx:f32,vy:f32,kind:f32 };
-struct F{radius:f32,strength:f32};
-struct S{dt:f32,friction:f32,w:f32,h:f32,t:f32,bc:f32,_0:f32,_1:f32};
-struct B{ x:f32,y:f32,f:f32,a:f32,d:f32,_0:f32,_1:f32,_2:f32};
-@group(0)@binding(0)var<storage,read>src:array<P>;
-@group(0)@binding(1)var<storage,read_write>dst:array<P>;
-@group(0)@binding(2)var<storage,read>tbl:array<F>;
-@group(1)@binding(0)var<uniform>sim:S;
-@group(2)@binding(0)var<storage,read>be:array<B,${MAX_BEACONS}>;
-const TAU=6.2831853; const C=100.0;
-@compute @workgroup_size(256)fn main(@builtin(global_invocation_id)gid:vec3<u32>){ let i=gid.x; if(i>=arrayLength(&src)){return;} var p=src[i]; var a=vec2<f32>(0.0); let kinds=${kindCount}u; for(var j:u32=0u;j<arrayLength(&src);j++){ if(i==j){continue;} let q=src[j]; let d=vec2<f32>(q.x-p.x,q.y-p.y); let r=length(d); if(r<1e-3){continue;} let fp=tbl[u32(p.kind)*kinds+u32(q.kind)]; if(r<fp.radius){ a+=normalize(d)*fp.strength*(1.0-r/fp.radius);} } let bc=u32(sim.bc); for(var k:u32=0u;k<bc;k++){ let b=be[k]; let d=vec2<f32>(p.x-b.x,p.y-b.y); let r=length(d); if(r<1e-3){continue;} let press=b.a*sin(TAU*b.f*(sim.t-r/C))/pow(r+1.0,b.d); a+=normalize(d)*press; } p.vx=(p.vx+a.x*sim.dt)*sim.friction; p.vy=(p.vy+a.y*sim.dt)*sim.friction; p.x+=p.vx*sim.dt; p.y+=p.vy*sim.dt; if(p.x<0.0){p.x=0.0;p.vx=-p.vx;} if(p.x>sim.w){p.x=sim.w;p.vx=-p.vx;} if(p.y<0.0){p.y=0.0;p.vy=-p.vy;} if(p.y>sim.h){p.y=sim.h;p.vy=-p.vy;} dst[i]=p; }`;
-
-    const vert=`struct P{ x:f32,y:f32,vx:f32,vy:f32,kind:f32 };
-@group(0)@binding(0)var<storage,read>ps:array<P>;
-struct O{@builtin(position)pos:vec4<f32>,@location(0)kind:f32};
-@vertex fn vs(@builtin(vertex_index)id:u32)->O{ let p=ps[id]; var o:O; o.pos=vec4<f32>((p.x/${domain.w}.0)*2.0-1.0, 1.0-(p.y/${domain.h}.0)*2.0,0,1); o.kind=p.kind; return o;}
-fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-abs(h*6.0-2.0),0,1); let b=clamp(2.0-abs(h*6.0-4.0),0,1); return vec3<f32>(r,g,b);} @fragment fn fs(i:O)->@location(0)vec4<f32>{ let c=hue(i.kind/${kindCount}.0); return vec4<f32>(c,1);} `;
-
-    /* pipelines (identical to previous version) */
-    const compPipe=device.createComputePipeline({layout:device.createPipelineLayout({bindGroupLayouts:[device.createBindGroupLayout({entries:[{binding:0,visibility:4,buffer:{type:'read-only-storage'}},{binding:1,visibility:4,buffer:{type:'storage'}},{binding:2,visibility:4,buffer:{type:'read-only-storage'}}]}),device.createBindGroupLayout({entries:[{binding:0,visibility:4,buffer:{type:'uniform'}}]}),device.createBindGroupLayout({entries:[{binding:0,visibility:4,buffer:{type:'read-only-storage'}}]})]}),compute:{module:device.createShaderModule({code:compCode}),entryPoint:'main'}});
-    const rPipe=device.createRenderPipeline({layout:device.createPipelineLayout({bindGroupLayouts:[device.createBindGroupLayout({entries:[{binding:0,visibility:1,buffer:{type:'read-only-storage'}}]})]}),vertex:{module:device.createShaderModule({code:vert}),entryPoint:'vs'},fragment:{module:device.createShaderModule({code:vert}),entryPoint:'fs',targets:[{format:navigator.gpu.getPreferredCanvasFormat()}]},primitive:{topology:'point-list'}});
-
-    const compBG_A=device.createBindGroup({layout:compPipe.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:bufA}},{binding:1,resource:{buffer:bufB}},{binding:2,resource:{buffer:fBuf}}]});
-    const compBG_B=device.createBindGroup({layout:compPipe.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:bufB}},{binding:1,resource:{buffer:bufA}},{binding:2,resource:{buffer:fBuf}}]});
-    const simBG   =device.createBindGroup({layout:compPipe.getBindGroupLayout(1),entries:[{binding:0,resource:{buffer:uBuf}}]});
-    const beaconBG=device.createBindGroup({layout:compPipe.getBindGroupLayout(2),entries:[{binding:0,resource:{buffer:beaconBuf}}]});
-    const rBG_A   =device.createBindGroup({layout:rPipe.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:bufA}}]});
-    const rBG_B   =device.createBindGroup({layout:rPipe.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:bufB}}]});
-
-    /* ────────── canvases & ctx ─────── */
-    const canvas  = document.getElementById('sim');
-    const oCanvas = document.getElementById('overlay');
-    const octx    = oCanvas.getContext('2d');
-    const ctx     = canvas.getContext('webgpu');
-    ctx.configure({device,format:navigator.gpu.getPreferredCanvasFormat(),alphaMode:'opaque'});
-
     /* ────────── interaction ─────────── */
     let placing=false;
     let dragIdx=-1;        // index of single‑beacon drag
@@ -298,7 +433,8 @@ fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-a
         octx.stroke();
       }
     }
-
+    /* show the beacon markers that were just loaded, if any*/
+    drawOverlay();
     /* ────────── simulation loop (unchanged) ─────── */
     let flip=false;
     function frame(){
@@ -533,6 +669,58 @@ fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-a
       if (e.button === 2) return;                            // right‑click handled above
       closePanel();
     });
+    /* ---------------------------------------------------------------
+       2.12  Runtime Save / Export
+    --------------------------------------------------------------- */
+    const fileOps = {
+      /* ---- quick local save for one-click reload --------------------- */
+      save () {
+        const blob = {
+          particleCount, kindCount, preset,
+          simParams,
+          forces      : Array.from(fData),
+          beaconCount,
+          beacons     : Array.from(beaconArr.slice(0, beaconCount * B_STRIDE))
+        };
+        localStorage.setItem('particleSimSave', JSON.stringify(blob));
+        alert('Saved to browser cache.');
+      },
+
+      /* ---- copy full JSON + docs to clipboard ------------------------ */
+      async exportJSON () {
+        const raw = localStorage.getItem('particleSimSave');
+        if (!raw) { alert('Nothing saved yet.'); return; }
+
+        const data = JSON.parse(raw);
+        data._doc = {                        //  ← helper info
+          particleCount : 'Total number of particles in the simulation.',
+          kindCount     : 'Number of distinct particle kinds / colours.',
+          preset        : '"Random" = random attraction table, "Sand" = zero attraction.',
+          simParams     : {
+            dt        : 'Simulation time-step.',
+            friction  : 'Velocity damping factor per step.'
+          },
+          forces        : '[radius, strength] pairs for every kind × kind interaction.',
+          beaconCount   : 'Number of active beacons in `beacons[]`.',
+          beacons       : 'Flattened array of beacons: [x, y, freq, amp, decay] …'
+        };
+        data._version = '1.0';
+
+        const json = JSON.stringify(data, null, 2);
+
+        try {
+          await navigator.clipboard.writeText(json);
+          alert('Save copied to clipboard with documentation 👍');
+        } catch {
+          alert('Clipboard failed – JSON printed to console.');
+          console.log(json);
+        }
+      }
+    };
+
+    runtimeGUI.add(fileOps,'save').name('💾 Save');
+    runtimeGUI.add(fileOps,'exportJSON').name('📋 Export');
+  }
   </script>
 </body>
 </html>
