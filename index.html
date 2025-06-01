@@ -54,6 +54,7 @@
 
   /* ---------- setup state & GUI --------------- */
   const MAX_BEACONS=16
+  const GRID_FLAG = 6;  
   const setup = {
     particleCount : 65_536,
     kindCount     : 2,
@@ -300,8 +301,16 @@ fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-a
     const DEFAULTS={freq:1, amp:100, decay:0.1, phase:0.0};
     const uploadBeacons=()=>queue.writeBuffer(beaconBuf,0,beaconArr);
     function beaconOffset(i){return i*B_STRIDE;}
-    function createBeacon(i,x,y,f=DEFAULTS.freq,a=DEFAULTS.amp,d=DEFAULTS.decay,p=DEFAULTS.phase){
-      const o=beaconOffset(i); beaconArr.set([x,y,f,a,d,p],o); }
+    function createBeacon(i,x,y,f=DEFAULTS.freq,a=DEFAULTS.amp,d=DEFAULTS.decay,
+                          p=DEFAULTS.phase,grid=0){
+      const o = beaconOffset(i);
+      beaconArr.set([x,y,f,a,d,p,grid], o);      // <─ include flag
+    }
+    function getGrid(i){ return beaconArr[beaconOffset(i)+GRID_FLAG] > 0.5; }
+    function setGrid(i,val){
+      beaconArr[beaconOffset(i)+GRID_FLAG] = val ? 1 : 0;
+      uploadBeacons();                // keep buffer in-sync
+    }
     function updateBeaconPos(i,x,y){
       const o=beaconOffset(i); beaconArr[o]=x; beaconArr[o+1]=y; }
     function copyBeacon(idx){
@@ -341,6 +350,30 @@ fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-a
         octx.strokeStyle = selected.has(i)?'#ff0':(i===selIdx?'#0ff':'#0f0');
         octx.lineWidth=2; octx.beginPath(); octx.arc(x,y,6,0,6.283); octx.stroke();
       }
+      for (let i = 0; i < beaconCount; ++i) {
+        if (!getGrid(i)) continue;
+
+        const bx = beaconArr[beaconOffset(i)    ];     // centre X
+        const by = beaconArr[beaconOffset(i) + 1];     // centre Y
+        const f  = beaconArr[beaconOffset(i) + 2] || 1;
+        const λ  = simParams.C / f;                    // pixels
+
+        if (λ < 4) continue;                           // too fine → ignore
+
+        octx.save();
+        octx.strokeStyle = 'rgba(255,255,255,0.15)';
+        octx.lineWidth   = 10;
+
+        /* verticals, anchored on bx */
+        for (let x = bx; x >= 0;           x -= λ) { octx.beginPath(); octx.moveTo(x,0);                 octx.lineTo(x,oCanvas.height); octx.stroke(); }
+        for (let x = bx + λ; x <= oCanvas.width; x += λ) { octx.beginPath(); octx.moveTo(x,0);                 octx.lineTo(x,oCanvas.height); octx.stroke(); }
+
+        /* horizontals, anchored on by */
+        for (let y = by; y >= 0;           y -= λ) { octx.beginPath(); octx.moveTo(0,y);                 octx.lineTo(oCanvas.width,y); octx.stroke(); }
+        for (let y = by + λ; y <= oCanvas.height; y += λ) { octx.beginPath(); octx.moveTo(0,y);                 octx.lineTo(oCanvas.width,y); octx.stroke(); }
+
+        octx.restore();
+      }      
     }
 
     /* GUI panels (single, add, group) ----------------------------------*/
@@ -406,11 +439,9 @@ fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-a
         decay: beaconArr[o + 4],
         phase: beaconArr[o + 5],
 
-        /* live read-only display */
-        get realHz() {
-          // "this" points at proxy, so its values stay up-to-date
-          return (this.freq * simParams.dt * fps).toFixed(2);
-        }
+        grid : !!beaconArr[o + GRID_FLAG],       // ← NEW
+
+        get realHz(){ return (this.freq * simParams.dt * fps).toFixed(2); }
       };
 
       const gui = makePanel(`Beacon ${idx}`, px, py);
@@ -430,6 +461,10 @@ fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-a
       /* read-only field that keeps refreshing because of .listen() */
       gui.add(proxy, 'realHz').name('real Hz (freq x dt x FPS)').listen();
 
+      gui.add(proxy,'grid')
+        .name('λ-grid')
+        .onChange(v => setGrid(idx, v));
+        
       gui.add({ copy() {
           const n = copyBeacon(idx);
           if (n >= 0) openBeaconEditor(n, px + 16, py + 16);
@@ -702,6 +737,30 @@ fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-a
         octx.arc(x,y,6,0,Math.PI*2);
         octx.stroke();
       }
+      for (let i = 0; i < beaconCount; ++i) {
+        if (!getGrid(i)) continue;
+
+        const bx = beaconArr[beaconOffset(i)    ];     // centre X
+        const by = beaconArr[beaconOffset(i) + 1];     // centre Y
+        const f  = beaconArr[beaconOffset(i) + 2] || 1;
+        const λ  = simParams.C / f;                    // pixels
+
+        if (λ < 4) continue;                           // too fine → ignore
+
+        octx.save();
+        octx.strokeStyle = 'rgba(255,255,255,0.15)';
+        octx.lineWidth   = 1;
+
+        /* verticals, anchored on bx */
+        for (let x = bx; x >= 0;           x -= λ) { octx.beginPath(); octx.moveTo(x,0);                 octx.lineTo(x,oCanvas.height); octx.stroke(); }
+        for (let x = bx + λ; x <= oCanvas.width; x += λ) { octx.beginPath(); octx.moveTo(x,0);                 octx.lineTo(x,oCanvas.height); octx.stroke(); }
+
+        /* horizontals, anchored on by */
+        for (let y = by; y >= 0;           y -= λ) { octx.beginPath(); octx.moveTo(0,y);                 octx.lineTo(oCanvas.width,y); octx.stroke(); }
+        for (let y = by + λ; y <= oCanvas.height; y += λ) { octx.beginPath(); octx.moveTo(0,y);                 octx.lineTo(oCanvas.width,y); octx.stroke(); }
+
+        octx.restore();
+      }            
     }
 
     drawOverlay();
@@ -792,6 +851,7 @@ fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-a
       rp.draw(particleCount); rp.end();
 
       queue.submit([enc.finish()]);
+      drawOverlay();
       flip=!flip; requestAnimationFrame(frame);
     }
     requestAnimationFrame(frame);
