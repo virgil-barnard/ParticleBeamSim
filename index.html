@@ -3,81 +3,71 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>WebGPU Particle-Life + Sound-Wave Beacons (Configurable)</title>
+  <title>WebGPU Particle-Life + Sound-Wave Beacons</title>
   <style>
-    body   { margin:0; background:#000; overflow:hidden; position:relative; color:#ddd; font-family:system-ui; }
+    body   { margin:0; background:#000; overflow:hidden; position:relative;
+             color:#ddd; font-family:system-ui; }
     canvas { display:block; }
     #overlay   { position:absolute; top:0; left:0; pointer-events:none; }
-    #setupMask { position:fixed; inset:0; background:#000d; display:flex; align-items:center; justify-content:center; }
+    #setupMask { position:fixed; inset:0; background:#000d;
+                 display:flex; align-items:center; justify-content:center; }
   </style>
 </head>
 <body>
-  <!-- Off-canvas until simulation starts -->
+  <!-- hidden until simulation starts -->
   <canvas id="sim"     width="1024" height="512" style="display:none"></canvas>
   <canvas id="overlay" width="1024" height="512" style="display:none"></canvas>
 
-  <!-- Setup screen -->
+  <!-- setup screen -->
   <div id="setupMask"></div>
 
   <script type="module">
   import GUI from 'https://cdn.jsdelivr.net/npm/lil-gui@0.19.1/dist/lil-gui.esm.min.js';
 
-  /********************************************************************
-   * 1.  PRE-SIMULATION SETUP PANEL
-   ********************************************************************/
+  /**********************************************************************
+   * SECTION 0 ─ PRE-SIMULATION SETUP (+ SAVE / IMPORT / PASTE)
+   *********************************************************************/
   const mask   = document.getElementById('setupMask');
   const stored = localStorage.getItem('particleSimSave');
 
-  /* ---------- helpers -------------------------------------------------- */
-  const tryStart = jsonTxt => {
+  /* ---------- helpers -------------------------- */
+  const tryStart = txt => {
     try {
-      const cfg = JSON.parse(jsonTxt);
-      // strip helper keys that begin with “_”
-      Object.keys(cfg).forEach(k => { if (k.startsWith('_')) delete cfg[k]; });
+      const cfg = JSON.parse(txt);
+      Object.keys(cfg).forEach(k => k.startsWith('_') && delete cfg[k]);
       startSim(cfg);
-    } catch (err) {
-      alert('❌  Could not parse JSON:\n' + err.message);
-      console.error(err);
+    } catch (e) {
+      alert('❌  Could not parse JSON:\n' + e.message);
+      console.error(e);
     }
   };
-
   async function importFile () {
-    const input = document.createElement('input');
-    input.type  = 'file';
-    input.accept = 'application/json';
-    input.click();
-    input.onchange = () => {
-      const file = input.files?.[0];
-      if (!file) return;
-      file.text().then(tryStart);
-    };
+    const el = Object.assign(document.createElement('input'),
+                              { type:'file', accept:'application/json' });
+    el.click();
+    el.onchange = () => el.files?.[0]?.text().then(tryStart);
   }
-
   function pasteJSON () {
     const txt = prompt('Paste your save JSON here:');
     if (txt) tryStart(txt);
   }
 
-  /* ---------- pre-launch config object --------------------------------- */
-  const setup  = {
+  /* ---------- setup state & GUI --------------- */
+  const MAX_BEACONS=16
+  const setup = {
     particleCount : 65_536,
     kindCount     : 2,
-    preset        : 'Random',          // Random | Sand
-    loadSaved     : () => stored && startSim(JSON.parse(stored)),
-    importFile,
-    pasteJSON,
-    launch        : () => startSim({
-                      particleCount : setup.particleCount,
-                      kindCount     : setup.kindCount,
-                      preset        : setup.preset
-                    })
+    preset        : 'Random',             // Random | Sand
+    loadSaved  : () => stored && startSim(JSON.parse(stored)),
+    importFile, pasteJSON,
+    launch     : () => startSim({
+                   particleCount : setup.particleCount,
+                   kindCount     : setup.kindCount,
+                   preset        : setup.preset
+                 })
   };
-
-  /* ---------- lil-gui panel ------------------------------------------- */
-  const preGUI = new GUI({ width: 300, container: mask });
-  preGUI.title('Simulation Setup');
-
-  preGUI.add(setup,'particleCount',1024,131072,1024).name('# Particles');
+  const preGUI = new GUI({ width:300, container:mask }).title('Simulation Setup');
+  preGUI.add(setup,'particleCount',1024,1<<16,1024).name('# Particles');
   preGUI.add(setup,'kindCount',1,6,1).name('# Kinds');
   preGUI.add(setup,'preset',['Random','Sand']).name('Preset');
   if (stored) preGUI.add(setup,'loadSaved').name('📂 Load Previous');
@@ -85,120 +75,103 @@
   preGUI.add(setup,'pasteJSON').name('📝 Paste JSON');
   preGUI.add(setup,'launch').name('🚀 Launch');
 
-  /*********************************************************************
-   * 2.  START SIMULATION (async)
+  /**********************************************************************
+   * SECTION 1 ─ MAIN ENTRY POINT (startSim)
    *********************************************************************/
-  async function startSim(cfg){
-    /* ---------------------------------------------------------------
-       Destroy setup UI & unmask canvases
-    --------------------------------------------------------------- */
+  async function startSim (cfg){
+    /* un-mask canvases & destroy setup */
     preGUI.destroy(); mask.remove();
     const canvas  = document.getElementById('sim');
     const oCanvas = document.getElementById('overlay');
     canvas.style.display = oCanvas.style.display = 'block';
+    const octx    = oCanvas.getContext('2d');
 
-    /* ---------------------------------------------------------------
-       Normalise config (handle save‑restore cases)
-    --------------------------------------------------------------- */
-    const particleCount = cfg.particleCount ?? 65536;
+    /* basic config normalisation */
+    const particleCount = cfg.particleCount ?? 65_536;
     const kindCount     = cfg.kindCount     ?? 2;
+    const C             = cfg.C             ?? 100;
     const preset        = cfg.preset        ?? 'Random';
-
-    /* ---------------------------------------------------------------
-       2.1  GPU device
-    --------------------------------------------------------------- */
-    if (!navigator.gpu) { alert('WebGPU not enabled'); throw new Error('WebGPU unavailable'); }
+    const domain        = { w:1024, h:512 };
+    const simParams     = cfg.simParams ?? { dt:0.01, friction:0.995, C:100 };
+    /*
+    real-seconds per frame   =  1 / FPS
+    simulation-seconds/frame =  dt
+    --------------------------------------
+    scale factor             =  dt × FPS
+    */
+    /*************************  SECTION 1A ─ GPU CORE ************************/
+    if (!navigator.gpu) { alert('WebGPU not enabled'); throw new Error('no GPU'); }
     const adapter = await navigator.gpu.requestAdapter();
     const device  = await adapter.requestDevice();
     const queue   = device.queue;
 
-    /* ---------------------------------------------------------------
-       2.2  Domain + GUI (runtime controls)
-    --------------------------------------------------------------- */
-    const domain  = { w: 1024, h: 512 };
-    const simParams = cfg.simParams ?? { dt: 0.2, friction: 0.995 };
-
-    const runtimeGUI = new GUI();
-    runtimeGUI.add(simParams,'dt',0.02,1,0.01);
-    runtimeGUI.add(simParams,'friction',0.1,1,0.0005);
-
-    /* ---------------------------------------------------------------
-       2.3  Particle buffers
-    --------------------------------------------------------------- */
-    const P_STRIDE = 5;
-    const pBytes   = particleCount*P_STRIDE*4;
-    const pInit    = new Float32Array(pBytes/4);
-
-    // Either restore saved positions or random scatter
-    if(cfg.particles){ pInit.set(cfg.particles); }
-    else {
-      for(let i=0,o=0;i<particleCount;++i,o+=P_STRIDE){
-        pInit[o  ] = Math.random()*domain.w;
-        pInit[o+1] = Math.random()*domain.h;
-        pInit[o+2] = (Math.random()-0.5)*2;
-        pInit[o+3] = (Math.random()-0.5)*2;
-        pInit[o+4] = Math.floor(Math.random()*kindCount);
-      }
+    /* particle buffers --------------------------------------------------*/
+    const P_STRIDE=5, pBytes=particleCount*P_STRIDE*4;
+    const pInit=new Float32Array(pBytes/4);
+    if (cfg.particles) pInit.set(cfg.particles);
+    else for(let i=0,o=0;i<particleCount;++i,o+=P_STRIDE){
+      pInit[o]=Math.random()*domain.w; pInit[o+1]=Math.random()*domain.h;
+      pInit[o+2]=(Math.random()-0.5)*2; pInit[o+3]=(Math.random()-0.5)*2;
+      pInit[o+4]=Math.floor(Math.random()*kindCount);
     }
-
-    const bufA = device.createBuffer({size:pBytes,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.VERTEX|GPUBufferUsage.COPY_DST});
-    const bufB = device.createBuffer({size:pBytes,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.VERTEX});
+    const bufA=device.createBuffer({size:pBytes,
+      usage:GPUBufferUsage.STORAGE|GPUBufferUsage.VERTEX|GPUBufferUsage.COPY_DST});
+    const bufB=device.createBuffer({size:pBytes,
+      usage:GPUBufferUsage.STORAGE|GPUBufferUsage.VERTEX});
     queue.writeBuffer(bufA,0,pInit);
 
-    /* ---------------------------------------------------------------
-       2.4  Attraction / Repulsion table
-    --------------------------------------------------------------- */
-    function buildTable(kindCount,preset){
-      const arr = new Float32Array(kindCount*kindCount*2);
-      for(let a=0;a<kindCount;++a){
-        for(let b=0;b<kindCount;++b){
-          const i=(a*kindCount+b)*2;
-          arr[i]   = 20 + Math.random()*40;       // radius
-          arr[i+1] = preset==='Sand' ? 0 : (Math.random()*2-1)*0.5; // strength
-        }
-      }
-      return arr;
+    /* attraction / repulsion table -------------------------------------*/
+    function buildTable(kc,p) {
+      const arr=new Float32Array(kc*kc*2);
+      for(let a=0;a<kc;++a)for(let b=0;b<kc;++b){
+        const i=(a*kc+b)*2;
+        arr[i]  =20+Math.random()*40;
+        arr[i+1]=(p==='Sand'?0:(Math.random()*2-1)*0.5);
+      } return arr;
     }
-    const fData = cfg.forces ? new Float32Array(cfg.forces) : buildTable(kindCount,preset);
-    const fBuf  = device.createBuffer({size:fData.byteLength,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
+    const fData = cfg.forces
+      ? new Float32Array(cfg.forces) : buildTable(kindCount,preset);
+    const fBuf  = device.createBuffer({size:fData.byteLength,
+      usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
     queue.writeBuffer(fBuf,0,fData);
 
-    /* ---------------------------------------------------------------
-       2.5  Beacon store (position + params)
-    --------------------------------------------------------------- */
-    const MAX_BEACONS = 16;
-    const B_STRIDE    = 8;
-    const beaconBytes = MAX_BEACONS*B_STRIDE*4;
-    const beaconArr   = new Float32Array(beaconBytes/4);
-
-    let beaconCount = cfg.beaconCount ?? 0;
-    if(cfg.beacons){ beaconArr.set(cfg.beacons,0); }
-
-    const beaconBuf = device.createBuffer({size:beaconBytes,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
-    queue.writeBuffer(beaconBuf,0,beaconArr);
-
-    /* ---------------------------------------------------------------
-       2.6  Uniforms
-    --------------------------------------------------------------- */
-    const uBuf = device.createBuffer({size:32,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
-    let simTime=0;
-    const updUniform = bc=>{
-      queue.writeBuffer(uBuf,0,new Float32Array([simParams.dt,simParams.friction,domain.w,domain.h,simTime,bc,0,0]));
+    /* simulation uniforms ----------------------------------------------*/
+    const uBuf = device.createBuffer({size:32,
+      usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+    let simTime=0; const updUniform=bc=>{
+      queue.writeBuffer(uBuf,0,new Float32Array([
+        simParams.dt,simParams.friction,domain.w,domain.h,simTime,bc,simParams.C,0]));
     };
 
-    /* ---------------------------------------------------------------
-       2.7  Shaders (template‑generated)
-    --------------------------------------------------------------- */
+    /* ---------- real-time FPS estimate ---------------------------------- */
+    let fps = 60;                       // start with a sane default
+    {
+      let sampleCount = 0, smoothed = 60, lastT = performance.now();
+      const upd = () => {
+        const now = performance.now();
+        const inst = 1000 / (now - lastT);
+        lastT = now;
+        smoothed = smoothed * 0.9 + inst * 0.1;   // simple IIR filter
+        if (++sampleCount === 10) {               // update every 10 frames
+          fps = smoothed;
+          sampleCount = 0;
+        }
+        requestAnimationFrame(upd);
+      };
+      requestAnimationFrame(upd);
+    }
+
+    /* WGSL shaders (generated) -----------------------------------------*/
     const compCode = `struct P{ x:f32,y:f32,vx:f32,vy:f32,kind:f32 };
 struct F{radius:f32,strength:f32};
-struct S{dt:f32,friction:f32,w:f32,h:f32,t:f32,bc:f32,_0:f32,_1:f32};
-struct B{ x:f32,y:f32,f:f32,a:f32,d:f32,_0:f32,_1:f32,_2:f32};
+struct S{ dt:f32, friction:f32, w:f32, h:f32, t:f32, bc:f32, C:f32, _0:f32 };
+struct B{ x:f32,y:f32,f:f32,a:f32,d:f32,ph:f32,_1:f32,_2:f32};
 @group(0)@binding(0)var<storage,read>src:array<P>;
 @group(0)@binding(1)var<storage,read_write>dst:array<P>;
 @group(0)@binding(2)var<storage,read>tbl:array<F>;
 @group(1)@binding(0)var<uniform>sim:S;
 @group(2)@binding(0)var<storage,read>be:array<B,${MAX_BEACONS}>;
-const TAU=6.2831853; const C=100.0;
+const TAU=6.2831853; 
 @compute @workgroup_size(256)fn main(@builtin(global_invocation_id)gid:vec3<u32>){
   let i=gid.x; if(i>=arrayLength(&src)){return;}
   var p=src[i]; var a=vec2<f32>(0.0);
@@ -210,10 +183,11 @@ const TAU=6.2831853; const C=100.0;
     let fp=tbl[u32(p.kind)*kinds+u32(q.kind)];
     if(r<fp.radius){ a+=normalize(d)*fp.strength*(1.0-r/fp.radius);} }
   let bc=u32(sim.bc);
+  let C=sim.C;
   for(var k:u32=0u;k<bc;k++){
     let b=be[k]; let d=vec2<f32>(p.x-b.x,p.y-b.y); let r=length(d);
     if(r<1e-3){continue;}
-    let press=b.a*sin(TAU*b.f*(sim.t-r/C))/pow(r+1.0,b.d);
+    let press=b.a*sin(TAU*b.f*(sim.t-r/C)+b.ph)/pow(r+1.0,b.d);
     a+=normalize(d)*press; }
   p.vx=(p.vx+a.x*sim.dt)*sim.friction; p.vy=(p.vy+a.y*sim.dt)*sim.friction;
   p.x+=p.vx*sim.dt; p.y+=p.vy*sim.dt;
@@ -221,7 +195,7 @@ const TAU=6.2831853; const C=100.0;
   if(p.y<0.0){p.y=0.0;p.vy=-p.vy;} if(p.y>sim.h){p.y=sim.h;p.vy=-p.vy;}
   dst[i]=p; }`;
 
-    const vert = `struct P{ x:f32,y:f32,vx:f32,vy:f32,kind:f32 };
+    const vertShader = `struct P{ x:f32,y:f32,vx:f32,vy:f32,kind:f32 };
 @group(0)@binding(0)var<storage,read>ps:array<P>;
 struct O{@builtin(position)pos:vec4<f32>,@location(0)kind:f32};
 @vertex fn vs(@builtin(vertex_index)id:u32)->O{
@@ -230,89 +204,386 @@ struct O{@builtin(position)pos:vec4<f32>,@location(0)kind:f32};
   o.kind=p.kind; return o;}
 fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-abs(h*6.0-2.0),0,1); let b=clamp(2.0-abs(h*6.0-4.0),0,1); return vec3<f32>(r,g,b);}
 @fragment fn fs(i:O)->@location(0)vec4<f32>{ let c=hue(i.kind/${kindCount}.0); return vec4<f32>(c,1);} `;
+    /* pipelines ---------------------------------------------------------*/
+    const cBGLayout = device.createBindGroupLayout({entries:[
+      {binding:0,visibility:4,buffer:{type:'read-only-storage'}},
+      {binding:1,visibility:4,buffer:{type:'storage'}},
+      {binding:2,visibility:4,buffer:{type:'read-only-storage'}}]});
+    const uBGLayout = device.createBindGroupLayout({entries:[
+      {binding:0,visibility:4,buffer:{type:'uniform'}}]});
+    const bBGLayout = device.createBindGroupLayout({entries:[
+      {binding:0,visibility:4,buffer:{type:'read-only-storage'}}]});
 
-    /* ---------------------------------------------------------------
-       2.8  Pipelines & bind groups (identical logic)
-    --------------------------------------------------------------- */
-    const compPipe=device.createComputePipeline({layout:device.createPipelineLayout({
-      bindGroupLayouts:[device.createBindGroupLayout({entries:[{binding:0,visibility:4,buffer:{type:'read-only-storage'}},{binding:1,visibility:4,buffer:{type:'storage'}},{binding:2,visibility:4,buffer:{type:'read-only-storage'}}]}),
-                        device.createBindGroupLayout({entries:[{binding:0,visibility:4,buffer:{type:'uniform'}}]}),
-                        device.createBindGroupLayout({entries:[{binding:0,visibility:4,buffer:{type:'read-only-storage'}}]})]}),
-      compute:{module:device.createShaderModule({code:compCode}),entryPoint:'main'}});
+    const compPipe=device.createComputePipeline({
+      layout:device.createPipelineLayout({bindGroupLayouts:[cBGLayout,uBGLayout,bBGLayout]}),
+      compute:{module:device.createShaderModule({code:compCode}),entryPoint:'main'}
+    });
+    const rBGLayout=device.createBindGroupLayout({entries:[
+      {binding:0,visibility:1,buffer:{type:'read-only-storage'}}]});
+    const rPipe=device.createRenderPipeline({
+      layout:device.createPipelineLayout({bindGroupLayouts:[rBGLayout]}),
+      vertex:{module:device.createShaderModule({code:vertShader}),entryPoint:'vs'},
+      fragment:{module:device.createShaderModule({code:vertShader}),
+                entryPoint:'fs',
+                targets:[{format:navigator.gpu.getPreferredCanvasFormat()}]},
+      primitive:{topology:'point-list'}
+    });
 
-    const rPipe=device.createRenderPipeline({layout:device.createPipelineLayout({bindGroupLayouts:[device.createBindGroupLayout({entries:[{binding:0,visibility:1,buffer:{type:'read-only-storage'}}]})]}),vertex:{module:device.createShaderModule({code:vert}),entryPoint:'vs'},fragment:{module:device.createShaderModule({code:vert}),entryPoint:'fs',targets:[{format:navigator.gpu.getPreferredCanvasFormat()}]},primitive:{topology:'point-list'}});
+    /********************  SECTION 1B ─ BEACON MODULE *********************
+     * Delete this whole block to strip every beacon-related feature.
+     ********************************************************************/
+    /*
+    1. freq:
+      real Hz = freq × simParams.dt × FPS 
 
-    const compBG_A=device.createBindGroup({layout:compPipe.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:bufA}},{binding:1,resource:{buffer:bufB}},{binding:2,resource:{buffer:fBuf}}]});
-    const compBG_B=device.createBindGroup({layout:compPipe.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:bufB}},{binding:1,resource:{buffer:bufA}},{binding:2,resource:{buffer:fBuf}}]});
-    const simBG   =device.createBindGroup({layout:compPipe.getBindGroupLayout(1),entries:[{binding:0,resource:{buffer:uBuf}}]});
-    const beaconBG=device.createBindGroup({layout:compPipe.getBindGroupLayout(2),entries:[{binding:0,resource:{buffer:beaconBuf}}]});
-    const rBG_A   =device.createBindGroup({layout:rPipe.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:bufA}}]});
-    const rBG_B   =device.createBindGroup({layout:rPipe.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:bufB}}]});
+      If you keep dt small (e.g., 0.02) the sim runs almost in real (FPS) time; if you
+      push dt to 0.2 the same freq looks 10× faster to a human viewer.
 
-    /* ---------------------------------------------------------------
-       2.9  Canvas & overlay contexts
-    --------------------------------------------------------------- */
-    const ctx  = canvas.getContext('webgpu');
-    ctx.configure({device,format:navigator.gpu.getPreferredCanvasFormat(),alphaMode:'opaque'});
-    const octx = oCanvas.getContext('2d');
+    2. decay:
+      press ∝ 1 / (r + 1)^d
 
-    /* ---------------------------------------------------------------
-       2.10  Beacon helpers (copy / add / delete etc.)
-    --------------------------------------------------------------- */
+      decay = 0 No attenuation → the beacon shakes the whole map equally.
+
+      decay = 1 Inverse-linear (sound in 2-D).
+
+      decay = 2 Inverse-square (sound in 3-D, light, gravity).
+
+      Because radius is in pixels, decay controls how “local” each beacon’s
+      influence feels.
+
+    3. amp:
+      amp is a scalar on the final acceleration term (before friction).
+      Higher values:
+
+      Make the particles accelerate harder toward/away from the beacon.
+
+      Increase wave steepness and therefore kinetic-energy injection.
+
+      You can treat it like a force constant in N-body physics (with the time unit
+      already baked in).
+
+    4. Propagation speed (C)
+      The delay term r / C makes the sine oscillation propagate as a circular wave front:
+
+      Wavelength (simulation units) λ = C / freq.
+
+      In real pixels you literally see the “rings” move outward at C px · s-sim⁻¹.
+
+      Raise C → longer wavelengths and faster-moving rings.
+
+    Putting it together
+    | parameter | what you’ll observe when you tweak it                                                                           |
+    | --------- | --------------------------------------------------------------------------------------------------------------- |
+    | **freq**  | Rings get closer (higher f) or wider (lower f) over the same sim-time; real-world Hz also scales by `dt × FPS`. |
+    | **amp**   | Particles shake more vigorously; high values can overpower the inter-particle attraction table.                 |
+    | **decay** | Low d ⇒ beacon affects the whole domain; high d ⇒ only particles near the beacon feel it.                       |
+    | **phase** | Just shifts the sine, useful for synchronising multiple beacons.                                                |
+    | **C**     | “Speed of sound” in your universe — how quickly a disturbance reaches a particle **r** pixels away.             |
+    
+    What each slider really changes
+    Raise freq → the beacon pulses faster everywhere; wavelength may shrink because λ = C / f, but the local oscillation period definitely shortens.
+    Raise C → the pulses spread outward faster and the wavelength grows, yet the oscillation period at any fixed point stays the same.
+    */
+
+    /* beacon storage ----------------------------------------------------*/
+    // x,y,freq,amp,decay,phase,_1,_2
+    const B_STRIDE=8, 
+          beaconBytes=MAX_BEACONS*B_STRIDE*4,
+          beaconArr = new Float32Array(beaconBytes/4);
+    let   beaconCount = cfg.beaconCount ?? 0;
+    if (cfg.beacons) beaconArr.set(cfg.beacons);
+    const beaconBuf=device.createBuffer({size:beaconBytes,
+      usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
+    queue.writeBuffer(beaconBuf,0,beaconArr);
+
+    /* helpers -----------------------------------------------------------*/
+    const DEFAULTS={freq:1, amp:100, decay:0.1, phase:0.0};
     const uploadBeacons=()=>queue.writeBuffer(beaconBuf,0,beaconArr);
-    const DEFAULTS = { freq: 1.0, amp: 100.0, decay: 0.1 };
-
-    function createBeacon (i, x, y, freq = DEFAULTS.freq, amp = DEFAULTS.amp, decay = DEFAULTS.decay) {
-      const o = i * B_STRIDE;
-      beaconArr[o]   = x;
-      beaconArr[o+1] = y;
-      beaconArr[o+2] = freq;
-      beaconArr[o+3] = amp;
-      beaconArr[o+4] = decay;
+    function beaconOffset(i){return i*B_STRIDE;}
+    function createBeacon(i,x,y,f=DEFAULTS.freq,a=DEFAULTS.amp,d=DEFAULTS.decay,p=DEFAULTS.phase){
+      const o=beaconOffset(i); beaconArr.set([x,y,f,a,d,p],o); }
+    function updateBeaconPos(i,x,y){
+      const o=beaconOffset(i); beaconArr[o]=x; beaconArr[o+1]=y; }
+    function copyBeacon(idx){
+      if (beaconCount>=MAX_BEACONS) return -1;
+      const oSrc=beaconOffset(idx), oDst=beaconOffset(beaconCount);
+      beaconArr.set(beaconArr.subarray(oSrc,oSrc+B_STRIDE),oDst);
+      return ++beaconCount, uploadBeacons(), beaconCount-1;
+    }
+    function deleteBeacon(idx){
+      if(idx<0||idx>=beaconCount) return;
+      if(idx<beaconCount-1){
+        beaconArr.set(beaconArr.subarray(beaconOffset(beaconCount-1),
+                                         beaconOffset(beaconCount)),
+                      beaconOffset(idx));
+      }
+      beaconCount--; uploadBeacons(); clearSelection(); closePanel();
     }
 
-    function updateBeaconPos (i, x, y) {
-      const o = i * B_STRIDE;
-      beaconArr[o]   = x;
-      beaconArr[o+1] = y;
+    /* selection state & overlay draw -----------------------------------*/
+    const selected=new Set(); let selIdx=-1, rectSelect=false,
+          dragIdx=-1, dragGroup=false, placing=false;
+    let rectStart=[0,0],rectEnd=[0,0],dragStart=[0,0],
+        groupInitPos=new Map();
+    function clearSelection(){selected.clear(); drawOverlay();}
+    function drawOverlay(){
+      octx.clearRect(0,0,oCanvas.width,oCanvas.height);
+      if(rectSelect){
+        const x0=Math.min(rectStart[0],rectEnd[0]),
+              y0=Math.min(rectStart[1],rectEnd[1]),
+              w =Math.abs(rectEnd[0]-rectStart[0]),
+              h =Math.abs(rectEnd[1]-rectStart[1]);
+        octx.setLineDash([4,4]); octx.strokeStyle='#ff0';
+        octx.strokeRect(x0,y0,w,h); octx.setLineDash([]);
+      }
+      for(let i=0;i<beaconCount;++i){
+        const x=beaconArr[beaconOffset(i)], y=beaconArr[beaconOffset(i)+1];
+        octx.strokeStyle = selected.has(i)?'#ff0':(i===selIdx?'#0ff':'#0f0');
+        octx.lineWidth=2; octx.beginPath(); octx.arc(x,y,6,0,6.283); octx.stroke();
+      }
     }
 
-    /** Duplicate a beacon – returns new index or -1 if limit reached */
-    function copyBeacon (idx) {
-      if (beaconCount >= MAX_BEACONS) return -1;
-      const base = idx * B_STRIDE;
-      const i    = beaconCount;
-      createBeacon(
-        i,
-        beaconArr[base],       // x
-        beaconArr[base + 1],   // y
-        beaconArr[base + 2],   // freq
-        beaconArr[base + 3],   // amp
-        beaconArr[base + 4],   // decay,
-      );
-      beaconCount++;
+    /* GUI panels (single, add, group) ----------------------------------*/
+    function relocateGroup(indices, mode){
+      if(indices.length<2) return;
+      const xs = indices.map(i=>beaconArr[i*B_STRIDE]);
+      const ys = indices.map(i=>beaconArr[i*B_STRIDE+1]);
+      const cx = xs.reduce((a,b)=>a+b,0)/indices.length;
+      const cy = ys.reduce((a,b)=>a+b,0)/indices.length;
+
+      switch(mode){
+        case 'circle':{
+          const r = Math.max(...indices.map(i=>Math.hypot(beaconArr[i*B_STRIDE]-cx,beaconArr[i*B_STRIDE+1]-cy))) || 60;
+          indices.forEach((idx,k)=>{
+            const ang = k*2*Math.PI/indices.length;
+            updateBeaconPos(idx, cx + r*Math.cos(ang), cy + r*Math.sin(ang));
+          });
+        }break;
+        case 'lineH':{
+          const minX=Math.min(...xs), maxX=Math.max(...xs);
+          const step = (maxX-minX)/(indices.length-1||1);
+          const y = cy;
+          indices.sort((a,b)=>beaconArr[a*B_STRIDE]-beaconArr[b*B_STRIDE])
+                 .forEach((idx,k)=>{ updateBeaconPos(idx, minX + k*step, y); });
+        }break;
+        case 'lineV':{
+          const minY=Math.min(...ys), maxY=Math.max(...ys);
+          const step = (maxY-minY)/(indices.length-1||1);
+          const x = cx;
+          indices.sort((a,b)=>beaconArr[a*B_STRIDE+1]-beaconArr[b*B_STRIDE+1])
+                 .forEach((idx,k)=>{ updateBeaconPos(idx, x, minY + k*step); });
+        }break;
+        case 'hex':{
+          const r=60;
+          const baseAng=Math.PI/6; // flat‑top hexagon
+          indices.forEach((idx,k)=>{
+            const ang = baseAng + k*2*Math.PI/6;
+            updateBeaconPos(idx, cx + r*Math.cos(ang), cy + r*Math.sin(ang));
+          });
+        }break;
+      }
       uploadBeacons();
       drawOverlay();
-      return i;
+    }
+    let activePanel=null;
+    function closePanel(){ activePanel?.destroy(); activePanel=null; }
+    function makePanel(title,x,y){
+      const gui=new GUI({width:180,autoPlace:false});
+      document.body.appendChild(gui.domElement);
+      Object.assign(gui.domElement.style,
+       {position:'absolute',left:`${x+12}px`,top:`${y+12}px`,zIndex:1000});
+      gui.title(title); activePanel=gui; return gui;
+    }
+    function openBeaconEditor(idx, px, py) {
+      closePanel();
+
+      const o = beaconOffset(idx);            // byte offset into beaconArr
+
+      // -------- data model shown in the GUI -----------------------------
+      const proxy = {
+        freq : beaconArr[o + 2],
+        amp  : beaconArr[o + 3],
+        decay: beaconArr[o + 4],
+        phase: beaconArr[o + 5],
+
+        /* live read-only display */
+        get realHz() {
+          // "this" points at proxy, so its values stay up-to-date
+          return (this.freq * simParams.dt * fps).toFixed(2);
+        }
+      };
+
+      const gui = makePanel(`Beacon ${idx}`, px, py);
+
+      gui.add(proxy, 'freq' , 0.1, 100, 0.1)
+        .onChange(v => { beaconArr[o + 2] = v; uploadBeacons(); });
+
+      gui.add(proxy, 'amp'  , 0.1, 200, 0.1)
+        .onChange(v => { beaconArr[o + 3] = v; uploadBeacons(); });
+
+      gui.add(proxy, 'decay', 0.1,   3, 0.1)
+        .onChange(v => { beaconArr[o + 4] = v; uploadBeacons(); });
+
+      gui.add(proxy, 'phase', -Math.PI, Math.PI, 0.1)
+        .onChange(v => { beaconArr[o + 5] = v; uploadBeacons(); });
+
+      /* read-only field that keeps refreshing because of .listen() */
+      gui.add(proxy, 'realHz').name('real Hz (freq x dt x FPS)').listen();
+
+      gui.add({ copy() {
+          const n = copyBeacon(idx);
+          if (n >= 0) openBeaconEditor(n, px + 16, py + 16);
+        }}, 'copy');
+
+      gui.add({ del() { deleteBeacon(idx); } }, 'del').name('🗑 Delete');
     }
 
-    function addBeacon(){ placing=true; }
+    function openAddPanel (xSim, ySim, px, py) {
+      if (beaconCount >= MAX_BEACONS) return;
+      closePanel();
+
+      /* ---------- data model shown in the panel ------------------------- */
+      const proxy = {
+        ...DEFAULTS,           // freq, amp, decay defaults
+        phase : 0,             // new slider starts at 0 rad
+
+        /* live preview of wall-clock frequency */
+        get realHz () {
+          return (this.freq * simParams.dt * fps).toFixed(2);
+        },
+
+        add () {               // create-button callback
+          createBeacon(
+            beaconCount,
+            xSim, ySim,
+            proxy.freq,
+            proxy.amp,
+            proxy.decay,
+            proxy.phase
+          );
+          beaconCount++;
+          uploadBeacons();
+          closePanel();
+          drawOverlay();
+        }
+      };
+
+      const gui = makePanel('Add Beacon', px, py);
+      gui.add(proxy, 'freq' , 0.01, 100, 0.01);
+      gui.add(proxy, 'amp'  , 0.01, 200, 0.01);
+      gui.add(proxy, 'decay', 0.01, 3, 0.01);
+      gui.add(proxy, 'phase', -Math.PI, Math.PI, 0.01);
+      gui.add(proxy, 'realHz').name('freq (Hz)').listen();   // read-only, auto-updates
+      gui.add(proxy, 'add').name('➕ Create');
+    }
+    /* ---------------------------------------------------------------------
+      Group panel (right‑click when multiple selected) ------------------ */
+    function openGroupPanel (indices, pageX, pageY) {
+      closePanel();
+      const gui = makePanel(`Group (${indices.length})`, pageX, pageY);
+
+      /* ─────────────  layout helpers  ───────────── */
+      const ops = {
+        lineHoriz () { relocateGroup(indices, 'lineH'); },
+        lineVert  () { relocateGroup(indices, 'lineV'); },
+        circle    () { relocateGroup(indices, 'circle'); },
+        hexagon   () { if (indices.length === 6) relocateGroup(indices, 'hex'); },
+        clearSel  () { clearSelection(); closePanel(); }
+      };
+      gui.add(ops, 'lineHoriz').name('⟷ Line H');
+      gui.add(ops, 'lineVert' ).name('⇵ Line V');
+      gui.add(ops, 'circle'   ).name('◯ Circle');
+      if (indices.length === 6) gui.add(ops, 'hexagon').name('⬡ Hexagon');
+      gui.add(ops, 'clearSel' ).name('✕ Clear');
+
+      /* ─────────────  batch-edit fields  ────────── */
+      const avg = field =>
+        indices.reduce((s, i) => s + beaconArr[i * B_STRIDE + field], 0) /
+        indices.length;
+
+      const proxy = {
+        freq  : avg(2),
+        amp   : avg(3),
+        decay : avg(4),
+        phase : avg(5),
+
+        /* live preview of wall-clock Hz for the current slider settings */
+        get realHz () {
+          return (this.freq * simParams.dt * fps).toFixed(2);
+        }
+      };
+
+      gui.add(proxy, 'freq' , 0.01, 100, 0.01)
+        .name('freq ↺')
+        .onChange(v => {
+          indices.forEach(i => { beaconArr[i * B_STRIDE + 2] = v; });
+          uploadBeacons();
+        });
+
+      gui.add(proxy, 'amp'  , 0.01, 200, 0.01)
+        .name('amp  ↺')
+        .onChange(v => {
+          indices.forEach(i => { beaconArr[i * B_STRIDE + 3] = v; });
+          uploadBeacons();
+        });
+
+      gui.add(proxy, 'decay', 0.01, 3, 0.01)
+        .name('decay ↺')
+        .onChange(v => {
+          indices.forEach(i => { beaconArr[i * B_STRIDE + 4] = v; });
+          uploadBeacons();
+        });
+
+      gui.add(proxy, 'phase', -Math.PI, Math.PI, .01)
+        .name('phase ↺')
+        .onChange(v => {
+          indices.forEach(i => { beaconArr[i * B_STRIDE + 5] = v; });
+          uploadBeacons();
+        });
+
+      gui.add(proxy, 'realHz').name('freq (Hz)').listen();   // read-only display
+    }
+    
+    /* pointer helpers & event listeners --------------------------------*/
+    canvas.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      const [xSim, ySim] = pos(e);
+      // Find nearest beacon within 12 px
+      let closest = -1;
+      let bestD2  = 144; // 12²
+      for (let i = 0; i < beaconCount; ++i) {
+        const dx = beaconArr[i * B_STRIDE]     - xSim;
+        const dy = beaconArr[i * B_STRIDE + 1] - ySim;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < bestD2) { bestD2 = d2; closest = i; }
+      }
+
+      if(selected.size>1){
+        // clicking anywhere opens group panel
+        openGroupPanel([...selected], e.pageX, e.pageY);
+        return;
+      }
+
+      if (closest >= 0) {
+        openBeaconEditor(closest, e.pageX, e.pageY);
+      } else {
+        openAddPanel(xSim, ySim, e.pageX, e.pageY);
+      }
+    });
+
+    /* ---------------------------------------------------------------------
+       Close panel on outside click -------------------------------------- */
+    window.addEventListener('pointerdown', e => {
+      if (!activePanel) return;
+      if (activePanel.domElement.contains(e.target)) return; // click inside panel
+      if (e.button === 2) return;                            // right‑click handled above
+      closePanel();
+    });
+    
+    const pos=e=>{
+      const r=canvas.getBoundingClientRect();return[e.clientX-r.left,e.clientY-r.top];
+    };
     /* ────────── interaction ─────────── */
-    let placing=false;
-    let dragIdx=-1;        // index of single‑beacon drag
-    let dragGroup=false;   // true when dragging group selection
-    let dragStart=[0,0];
-    let groupInitPos=new Map(); // idx -> [x0,y0]
-
-    const pos=e=>{const r=canvas.getBoundingClientRect();return[e.clientX-r.left,e.clientY-r.top];};
-
-    // NEW: multi‑selection support ------------------------------------------
-    const selected = new Set();  // indices of selected beacons
-    function clearSelection(){ selected.clear(); drawOverlay(); }
-
-    // NEW: rectangle selection state ---------------------------------------
-    let rectSelect=false;
-    let rectStart=[0,0], rectEnd=[0,0];
 
     canvas.addEventListener('pointerdown',e=>{
       const [x,y]=pos(e);
@@ -407,7 +678,6 @@ fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-a
     });
 
     /* ────────── overlay draw ────────── */
-    let selIdx=-1, selFolder=null;
     function drawOverlay(){
       octx.clearRect(0,0,oCanvas.width,oCanvas.height);
 
@@ -433,266 +703,33 @@ fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-a
         octx.stroke();
       }
     }
-    /* show the beacon markers that were just loaded, if any*/
+
     drawOverlay();
-    /* ────────── simulation loop (unchanged) ─────── */
-    let flip=false;
-    function frame(){
-      simTime+=simParams.dt; updUniform(beaconCount);
-      const enc=device.createCommandEncoder();
-      const cp=enc.beginComputePass();
-      cp.setPipeline(compPipe);
-      cp.setBindGroup(0,flip?compBG_B:compBG_A);
-      cp.setBindGroup(1,simBG);
-      cp.setBindGroup(2,beaconBG);
-      cp.dispatchWorkgroups(Math.ceil(particleCount/256));
-      cp.end();
+    /* ******************** END OF BEACON MODULE *************************/
 
-      const view=ctx.getCurrentTexture().createView();
-      const rp=enc.beginRenderPass({colorAttachments:[{view,loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:1}}]});
-      rp.setPipeline(rPipe);
-      rp.setBindGroup(0,flip?rBG_A:rBG_B);
-      rp.draw(particleCount);
-      rp.end();
-
-      queue.submit([enc.finish()]);
-      flip=!flip;
-      requestAnimationFrame(frame);
-    }
-    requestAnimationFrame(frame);
-
-    /* ---------------------------------------------------------------------
-       Deletion helper overrides (clear selection) ------------------------ */
-    function deleteBeacon (idx) {
-      if (idx < 0 || idx >= beaconCount) return;
-      // Move last beacon into the gap to keep the array packed
-      if (idx < beaconCount - 1) {
-        beaconArr.set(
-          beaconArr.subarray((beaconCount - 1) * B_STRIDE, beaconCount * B_STRIDE),
-          idx * B_STRIDE,
-        );
-        // Update selection indices: shift anyone that moved
-        const movedFrom = beaconCount - 1;
-        selected.delete(movedFrom);
-        selected.delete(idx);
-        [...selected].forEach(j=>{ if(j>idx && j<movedFrom) { selected.delete(j); selected.add(j-1);} });
-      }
-      beaconCount--; selIdx=-1; clearSelection();
-      uploadBeacons();
-      closePanel();
-      drawOverlay();
-    }
-
-    /* ---------------------------------------------------------------------
-       Group relocation helpers ------------------------------------------ */
-    function relocateGroup(indices, mode){
-      if(indices.length<2) return;
-      const xs = indices.map(i=>beaconArr[i*B_STRIDE]);
-      const ys = indices.map(i=>beaconArr[i*B_STRIDE+1]);
-      const cx = xs.reduce((a,b)=>a+b,0)/indices.length;
-      const cy = ys.reduce((a,b)=>a+b,0)/indices.length;
-
-      switch(mode){
-        case 'circle':{
-          const r = Math.max(...indices.map(i=>Math.hypot(beaconArr[i*B_STRIDE]-cx,beaconArr[i*B_STRIDE+1]-cy))) || 60;
-          indices.forEach((idx,k)=>{
-            const ang = k*2*Math.PI/indices.length;
-            updateBeaconPos(idx, cx + r*Math.cos(ang), cy + r*Math.sin(ang));
-          });
-        }break;
-        case 'lineH':{
-          const minX=Math.min(...xs), maxX=Math.max(...xs);
-          const step = (maxX-minX)/(indices.length-1||1);
-          const y = cy;
-          indices.sort((a,b)=>beaconArr[a*B_STRIDE]-beaconArr[b*B_STRIDE])
-                 .forEach((idx,k)=>{ updateBeaconPos(idx, minX + k*step, y); });
-        }break;
-        case 'lineV':{
-          const minY=Math.min(...ys), maxY=Math.max(...ys);
-          const step = (maxY-minY)/(indices.length-1||1);
-          const x = cx;
-          indices.sort((a,b)=>beaconArr[a*B_STRIDE+1]-beaconArr[b*B_STRIDE+1])
-                 .forEach((idx,k)=>{ updateBeaconPos(idx, x, minY + k*step); });
-        }break;
-        case 'hex':{
-          const r=60;
-          const baseAng=Math.PI/6; // flat‑top hexagon
-          indices.forEach((idx,k)=>{
-            const ang = baseAng + k*2*Math.PI/6;
-            updateBeaconPos(idx, cx + r*Math.cos(ang), cy + r*Math.sin(ang));
-          });
-        }break;
-      }
-      uploadBeacons();
-      drawOverlay();
-    }
-
-    /* ---------------------------------------------------------------------
-       Panel lifecycle helpers ------------------------------------------ */
-    let activePanel = null;   // current lil‑gui instance (if any)
-
-    function closePanel () {
-      if (activePanel) {
-        document.body.removeChild(activePanel.domElement);
-        activePanel.destroy();
-        activePanel = null;
-      }
-    }
-
-    function makePanel (title, x, y) {
-      const gui = new GUI({ width: 180, autoPlace: false });
-      document.body.appendChild(gui.domElement);
-      Object.assign(gui.domElement.style, {
-        position: 'absolute',
-        left:     `${x + 12}px`,
-        top:      `${y + 12}px`,
-        zIndex:   1000,
-      });
-      gui.title(title);
-      activePanel = gui;
-      return gui;
-    }
-
-    /* ---------------------------------------------------------------------
-       Beacon editor (right‑click on single beacon) ----------------------- */
-    function openBeaconEditor (idx, pageX, pageY) {
-      closePanel();
-      const base  = idx * B_STRIDE;
-      const proxy = {
-        freq:  beaconArr[base + 2],
-        amp:   beaconArr[base + 3],
-        decay: beaconArr[base + 4],
-      };
-
-      const gui = makePanel(`Beacon ${idx}`, pageX, pageY);
-
-      gui.add(proxy, 'freq',  0.1, 100, 0.1).onChange(v => {
-        beaconArr[base + 2] = v; uploadBeacons();
-      });
-      gui.add(proxy, 'amp',   0.1, 200, 0.1).onChange(v => {
-        beaconArr[base + 3] = v; uploadBeacons();
-      });
-      gui.add(proxy, 'decay', 0.1,  3, 0.1).onChange(v => {
-        beaconArr[base + 4] = v; uploadBeacons();
-      });
-
-      // Copy + Delete -----------------------------------------------------
-      gui.add({ copy () {
-        const newIdx = copyBeacon(idx);
-        if (newIdx >= 0) {
-          closePanel();
-          openBeaconEditor(newIdx, pageX + 16, pageY + 16);
-        }
-      } }, 'copy').name('📋 Copy');
-
-      gui.add({ del () { deleteBeacon(idx); } }, 'del').name('🗑 Delete');
-    }
-
-    /* ---------------------------------------------------------------------
-       Add‑Beacon panel (right‑click empty area) -------------------------- */
-    function openAddPanel (xSim, ySim, pageX, pageY) {
-      closePanel();
-      if (beaconCount >= MAX_BEACONS) return;
-      const proxy = { ...DEFAULTS, add () {
-        const i = beaconCount;
-        createBeacon(i, xSim, ySim, proxy.freq, proxy.amp, proxy.decay);
-        beaconCount++; uploadBeacons(); closePanel(); drawOverlay();
-      }};
-      const gui = makePanel('Add Beacon', pageX, pageY);
-      gui.add(proxy, 'freq',  0.1, 100, 0.1);
-      gui.add(proxy, 'amp',   0.1, 200, 0.1);
-      gui.add(proxy, 'decay', 0.1,  3, 0.1);
-      gui.add(proxy, 'add').name('➕ Create');
-    }
-
-    /* ---------------------------------------------------------------------
-       Group panel (right‑click when multiple selected) ------------------ */
-    function openGroupPanel(indices, pageX, pageY){
-      closePanel();
-      const gui = makePanel(`Group (${indices.length})`, pageX, pageY);
-
-      // Relocation ops ----------------------------------------------------
-      const ops = {
-        lineHoriz(){ relocateGroup(indices,'lineH'); },
-        lineVert (){ relocateGroup(indices,'lineV'); },
-        circle   (){ relocateGroup(indices,'circle'); },
-        hexagon  (){ if(indices.length===6) relocateGroup(indices,'hex'); },
-        clearSel (){ clearSelection(); closePanel(); }
-      };
-      gui.add(ops,'lineHoriz').name('⟷ Line H');
-      gui.add(ops,'lineVert').name('⇵ Line V');
-      gui.add(ops,'circle').name('◯ Circle');
-      if(indices.length===6) gui.add(ops,'hexagon').name('⬡ Hexagon');
-      gui.add(ops,'clearSel').name('✕ Clear');
-
-      // Batch‑edit parameters -------------------------------------------
-      const avg=(field)=>indices.reduce((s,i)=>s+beaconArr[i*B_STRIDE+field],0)/indices.length;
-      const proxy={freq:avg(2),amp:avg(3),decay:avg(4)};
-      gui.add(proxy,'freq',0.1,100,0.1).name('freq ↺').onChange(v=>{indices.forEach(i=>{beaconArr[i*B_STRIDE+2]=v;}); uploadBeacons();});
-      gui.add(proxy,'amp',0.1,200,0.1).name('amp ↺').onChange(v=>{indices.forEach(i=>{beaconArr[i*B_STRIDE+3]=v;}); uploadBeacons();});
-      gui.add(proxy,'decay',0.1,3,0.1).name('decay ↺').onChange(v=>{indices.forEach(i=>{beaconArr[i*B_STRIDE+4]=v;}); uploadBeacons();});
-    }
-
-    /* ---------------------------------------------------------------------
-       Context‑menu dispatcher ------------------------------------------- */
-    canvas.addEventListener('contextmenu', e => {
-      e.preventDefault();
-      const [xSim, ySim] = pos(e);
-      // Find nearest beacon within 12 px
-      let closest = -1;
-      let bestD2  = 144; // 12²
-      for (let i = 0; i < beaconCount; ++i) {
-        const dx = beaconArr[i * B_STRIDE]     - xSim;
-        const dy = beaconArr[i * B_STRIDE + 1] - ySim;
-        const d2 = dx * dx + dy * dy;
-        if (d2 < bestD2) { bestD2 = d2; closest = i; }
-      }
-
-      if(selected.size>1){
-        // clicking anywhere opens group panel
-        openGroupPanel([...selected], e.pageX, e.pageY);
-        return;
-      }
-
-      if (closest >= 0) {
-        openBeaconEditor(closest, e.pageX, e.pageY);
-      } else {
-        openAddPanel(xSim, ySim, e.pageX, e.pageY);
-      }
-    });
-
-    /* ---------------------------------------------------------------------
-       Close panel on outside click -------------------------------------- */
-    window.addEventListener('pointerdown', e => {
-      if (!activePanel) return;
-      if (activePanel.domElement.contains(e.target)) return; // click inside panel
-      if (e.button === 2) return;                            // right‑click handled above
-      closePanel();
-    });
-    /* ---------------------------------------------------------------
-       2.12  Runtime Save / Export
-    --------------------------------------------------------------- */
-    const fileOps = {
-      /* ---- quick local save for one-click reload --------------------- */
-      save () {
-        const blob = {
-          particleCount, kindCount, preset,
-          simParams,
-          forces      : Array.from(fData),
-          beaconCount,
-          beacons     : Array.from(beaconArr.slice(0, beaconCount * B_STRIDE))
+    /********************  SECTION 1C ─ UI CONTROLS **********************/
+    const runtimeGUI=new GUI();
+    runtimeGUI.add(simParams,'dt',0.02,1,0.01).name('Sim-seconds per-frame (s-sim)');
+    runtimeGUI.add(simParams,'friction',0.1,1,0.0005).name('Velocity damping (1 = no loss)');
+    runtimeGUI.add(simParams, 'C', 1, 500, 1).name('Beacon wave speed (px · s-sim⁻¹)');
+    /********************  SECTION 1D ─ FILE I/O *************************
+     * Remove this block if you don’t need browser save/export.
+     ********************************************************************/
+    const fileOps={
+      save(){
+        const blob={
+          particleCount,kindCount,preset,simParams,
+          forces:Array.from(fData),beaconCount,
+          beacons:Array.from(beaconArr.slice(0,beaconCount*B_STRIDE))
         };
-        localStorage.setItem('particleSimSave', JSON.stringify(blob));
+        localStorage.setItem('particleSimSave',JSON.stringify(blob));
         alert('Saved to browser cache.');
       },
-
-      /* ---- copy full JSON + docs to clipboard ------------------------ */
-      async exportJSON () {
-        const raw = localStorage.getItem('particleSimSave');
-        if (!raw) { alert('Nothing saved yet.'); return; }
-
-        const data = JSON.parse(raw);
-        data._doc = {                        //  ← helper info
+      async exportJSON(){
+        const raw=localStorage.getItem('particleSimSave');
+        if(!raw){alert('Nothing saved yet.');return;}
+        const data=JSON.parse(raw);
+        data._doc = {                    
           particleCount : 'Total number of particles in the simulation.',
           kindCount     : 'Number of distinct particle kinds / colours.',
           preset        : '"Random" = random attraction table, "Sand" = zero attraction.',
@@ -702,25 +739,64 @@ fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-a
           },
           forces        : '[radius, strength] pairs for every kind × kind interaction.',
           beaconCount   : 'Number of active beacons in `beacons[]`.',
-          beacons       : 'Flattened array of beacons: [x, y, freq, amp, decay] …'
+          beacons       : 'Flattened array of beacons: [x, y, freq, amp, decay, phase] …'
         };
-        data._version = '1.0';
-
-        const json = JSON.stringify(data, null, 2);
-
-        try {
-          await navigator.clipboard.writeText(json);
-          alert('Save copied to clipboard with documentation 👍');
-        } catch {
-          alert('Clipboard failed – JSON printed to console.');
-          console.log(json);
-        }
+        const json=JSON.stringify(data,null,2);
+        try{await navigator.clipboard.writeText(json);
+            alert('Save copied to clipboard 👍');}
+        catch{console.log(json); alert('Clipboard failed – see console.');}
       }
     };
-
     runtimeGUI.add(fileOps,'save').name('💾 Save');
     runtimeGUI.add(fileOps,'exportJSON').name('📋 Export');
-  }
+
+    /********************  SECTION 1E ─ SIM LOOP *************************/
+    const ctx=canvas.getContext('webgpu');
+    ctx.configure({device,format:navigator.gpu.getPreferredCanvasFormat(),
+                   alphaMode:'opaque'});
+    const compBG_A=device.createBindGroup({layout:cBGLayout,
+      entries:[{binding:0,resource:{buffer:bufA}},
+               {binding:1,resource:{buffer:bufB}},
+               {binding:2,resource:{buffer:fBuf}}]});
+    const compBG_B=device.createBindGroup({layout:cBGLayout,
+      entries:[{binding:0,resource:{buffer:bufB}},
+               {binding:1,resource:{buffer:bufA}},
+               {binding:2,resource:{buffer:fBuf}}]});
+    const simBG=device.createBindGroup({layout:uBGLayout,
+      entries:[{binding:0,resource:{buffer:uBuf}}]});
+    const beaconBG=device.createBindGroup({layout:bBGLayout,
+      entries:[{binding:0,resource:{buffer:beaconBuf}}]});
+    const rBG_A=device.createBindGroup({layout:rBGLayout,
+      entries:[{binding:0,resource:{buffer:bufA}}]});
+    const rBG_B=device.createBindGroup({layout:rBGLayout,
+      entries:[{binding:0,resource:{buffer:bufB}}]});
+
+    let flip=false;
+    function frame(){
+      simTime+=simParams.dt; updUniform(beaconCount);
+      const enc=device.createCommandEncoder();
+
+      const cp=enc.beginComputePass();
+      cp.setPipeline(compPipe);
+      cp.setBindGroup(0,flip?compBG_B:compBG_A);
+      cp.setBindGroup(1,simBG);
+      cp.setBindGroup(2,beaconBG);
+      cp.dispatchWorkgroups(Math.ceil(particleCount/256));
+      cp.end();
+
+      const rp=enc.beginRenderPass({colorAttachments:[{
+        view:ctx.getCurrentTexture().createView(),
+        loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:1}}]});
+      rp.setPipeline(rPipe);
+      rp.setBindGroup(0,flip?rBG_A:rBG_B);
+      rp.draw(particleCount); rp.end();
+
+      queue.submit([enc.finish()]);
+      flip=!flip; requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+    /* ****************************************************************** */
+  } //  ← end startSim
   </script>
 </body>
 </html>
