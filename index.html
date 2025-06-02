@@ -446,16 +446,16 @@ fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-a
 
       const gui = makePanel(`Beacon ${idx}`, px, py);
 
-      gui.add(proxy, 'freq' , 0.1, 100, 0.1)
+      gui.add(proxy, 'freq' , 0.1, 100, 0.001)
         .onChange(v => { beaconArr[o + 2] = v; uploadBeacons(); });
 
-      gui.add(proxy, 'amp'  , 0.1, 200, 0.1)
+      gui.add(proxy, 'amp'  , 0.1, 200, 0.001)
         .onChange(v => { beaconArr[o + 3] = v; uploadBeacons(); });
 
-      gui.add(proxy, 'decay', 0.1,   3, 0.1)
+      gui.add(proxy, 'decay', 0.1,   3, 0.001)
         .onChange(v => { beaconArr[o + 4] = v; uploadBeacons(); });
 
-      gui.add(proxy, 'phase', -Math.PI, Math.PI, 0.1)
+      gui.add(proxy, 'phase', -Math.PI, Math.PI, 0.001)
         .onChange(v => { beaconArr[o + 5] = v; uploadBeacons(); });
 
       /* read-only field that keeps refreshing because of .listen() */
@@ -504,10 +504,10 @@ fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-a
       };
 
       const gui = makePanel('Add Beacon', px, py);
-      gui.add(proxy, 'freq' , 0.01, 100, 0.01);
-      gui.add(proxy, 'amp'  , 0.01, 200, 0.01);
-      gui.add(proxy, 'decay', 0.01, 3, 0.01);
-      gui.add(proxy, 'phase', -Math.PI, Math.PI, 0.01);
+      gui.add(proxy, 'freq' , 0.01, 100, 0.0001);
+      gui.add(proxy, 'amp'  , 0.01, 200, 0.0001);
+      gui.add(proxy, 'decay', 0.01, 3, 0.0001);
+      gui.add(proxy, 'phase', -Math.PI, Math.PI, 0.0001);
       gui.add(proxy, 'realHz').name('freq (Hz)').listen();   // read-only, auto-updates
       gui.add(proxy, 'add').name('➕ Create');
     }
@@ -548,28 +548,28 @@ fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-a
         }
       };
 
-      gui.add(proxy, 'freq' , 0.01, 100, 0.01)
+      gui.add(proxy, 'freq' , 0.01, 100, 0.0001)
         .name('freq ↺')
         .onChange(v => {
           indices.forEach(i => { beaconArr[i * B_STRIDE + 2] = v; });
           uploadBeacons();
         });
 
-      gui.add(proxy, 'amp'  , 0.01, 200, 0.01)
+      gui.add(proxy, 'amp'  , 0.01, 200, 0.0001)
         .name('amp  ↺')
         .onChange(v => {
           indices.forEach(i => { beaconArr[i * B_STRIDE + 3] = v; });
           uploadBeacons();
         });
 
-      gui.add(proxy, 'decay', 0.01, 3, 0.01)
+      gui.add(proxy, 'decay', 0.01, 3, 0.0001)
         .name('decay ↺')
         .onChange(v => {
           indices.forEach(i => { beaconArr[i * B_STRIDE + 4] = v; });
           uploadBeacons();
         });
 
-      gui.add(proxy, 'phase', -Math.PI, Math.PI, .01)
+      gui.add(proxy, 'phase', -Math.PI, Math.PI, .0001)
         .name('phase ↺')
         .onChange(v => {
           indices.forEach(i => { beaconArr[i * B_STRIDE + 5] = v; });
@@ -768,9 +768,9 @@ fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-a
 
     /********************  SECTION 1C ─ UI CONTROLS **********************/
     const runtimeGUI=new GUI();
-    runtimeGUI.add(simParams,'dt',0.02,1,0.01).name('Sim-seconds per-frame (s-sim)');
-    runtimeGUI.add(simParams,'friction',0.1,1,0.0005).name('Velocity damping (1 = no loss)');
-    runtimeGUI.add(simParams, 'C', 1, 500, 1).name('Beacon wave speed (px · s-sim⁻¹)');
+    runtimeGUI.add(simParams,'dt',0.01,1,0.0001).name('Sim-seconds per-frame (s-sim)');
+    runtimeGUI.add(simParams,'friction',0.01,1,0.0001).name('Velocity damping (1 = no loss)');
+    runtimeGUI.add(simParams, 'C', 1, 500, 0.0001).name('Beacon wave speed (px · s-sim⁻¹)');
     /********************  SECTION 1D ─ FILE I/O *************************
      * Remove this block if you don’t need browser save/export.
      ********************************************************************/
