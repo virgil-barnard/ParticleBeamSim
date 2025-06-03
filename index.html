@@ -27,8 +27,11 @@
   /**********************************************************************
    * SECTION 0 ─ PRE-SIMULATION SETUP (+ SAVE / IMPORT / PASTE)
    *********************************************************************/
-  const mask   = document.getElementById('setupMask');
-  const stored = localStorage.getItem('particleSimSave');
+  const mask    = document.getElementById('setupMask');
+  const stored  = localStorage.getItem('particleSimSave');
+  const canvas  = document.getElementById('sim');
+  const oCanvas = document.getElementById('overlay');
+  const octx    = oCanvas.getContext('2d');
 
   /* ---------- helpers -------------------------- */
   const tryStart = txt => {
@@ -59,10 +62,7 @@
   const WAVE_FLAG = 7;
   const WAVE_LEN  = 256;
 
-  const setup = {
-    particleCount : 65_536,
-    kindCount     : 2,
-    preset        : 'Random',             // Random | Sand
+    canvas.style.display = oCanvas.style.display = 'block';
     loadSaved  : () => stored && startSim(JSON.parse(stored)),
     importFile, pasteJSON,
     launch     : () => startSim({
@@ -442,8 +442,8 @@ fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-a
             updateBeaconPos(idx, cx + r*Math.cos(ang), cy + r*Math.sin(ang));
           });
         }break;
-        case 'lineH':{
-          const minX=Math.min(...xs), maxX=Math.max(...xs);
+      el.onchange = () => el.files?.[0]?.text().then(fileTxt => {
+        const lines = fileTxt.trim().split(/\r?\n/);
           const step = (maxX-minX)/(indices.length-1||1);
           const y = cy;
           indices.sort((a,b)=>beaconArr[a*B_STRIDE]-beaconArr[b*B_STRIDE])
