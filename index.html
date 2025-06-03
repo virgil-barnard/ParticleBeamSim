@@ -54,7 +54,9 @@
 
   /* ---------- setup state & GUI --------------- */
   const MAX_BEACONS=16
-  const GRID_FLAG = 6;  
+  const GRID_FLAG = 6;
+  const WAVE_FLAG = 7;
+  const WAVE_LEN  = 256;
   const setup = {
     particleCount : 65_536,
     kindCount     : 2,
@@ -166,13 +168,26 @@
     const compCode = `struct P{ x:f32,y:f32,vx:f32,vy:f32,kind:f32 };
 struct F{radius:f32,strength:f32};
 struct S{ dt:f32, friction:f32, w:f32, h:f32, t:f32, bc:f32, C:f32, _0:f32 };
-struct B{ x:f32,y:f32,f:f32,a:f32,d:f32,ph:f32,_1:f32,_2:f32};
+struct B{ x:f32,y:f32,f:f32,a:f32,d:f32,ph:f32,grid:f32,useWave:f32};
 @group(0)@binding(0)var<storage,read>src:array<P>;
 @group(0)@binding(1)var<storage,read_write>dst:array<P>;
 @group(0)@binding(2)var<storage,read>tbl:array<F>;
 @group(1)@binding(0)var<uniform>sim:S;
 @group(2)@binding(0)var<storage,read>be:array<B,${MAX_BEACONS}>;
-const TAU=6.2831853; 
+@group(3)@binding(0)var<storage,read>wv:array<f32,${MAX_BEACONS*WAVE_LEN}>;
+const TAU=6.2831853;
+const WAVE_LEN=${WAVE_LEN}u;
+
+fn waveLookup(base:u32, ang:f32)->f32{
+  let t=ang/TAU - floor(ang/TAU);
+  let p=t*f32(WAVE_LEN);
+  let i=u32(p);
+  let f=p-f32(i);
+  let off=base*WAVE_LEN;
+  let a0=wv[off + (i%WAVE_LEN)];
+  let a1=wv[off + ((i+1u)%WAVE_LEN)];
+  return a0*(1.0-f)+a1*f;
+}
 @compute @workgroup_size(256)fn main(@builtin(global_invocation_id)gid:vec3<u32>){
   let i=gid.x; if(i>=arrayLength(&src)){return;}
   var p=src[i]; var a=vec2<f32>(0.0);
@@ -188,7 +203,10 @@ const TAU=6.2831853;
   for(var k:u32=0u;k<bc;k++){
     let b=be[k]; let d=vec2<f32>(p.x-b.x,p.y-b.y); let r=length(d);
     if(r<1e-3){continue;}
-    let press=b.a*sin(TAU*b.f*(sim.t-r/C)+b.ph)/pow(r+1.0,b.d);
+    let ang=TAU*b.f*(sim.t-r/C)+b.ph;
+    var w=sin(ang);
+    if(b.useWave>0.5){ w=waveLookup(k, ang); }
+    let press=b.a*w/pow(r+1.0,b.d);
     a+=normalize(d)*press; }
   p.vx=(p.vx+a.x*sim.dt)*sim.friction; p.vy=(p.vy+a.y*sim.dt)*sim.friction;
   p.x+=p.vx*sim.dt; p.y+=p.vy*sim.dt;
@@ -214,9 +232,11 @@ fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-a
       {binding:0,visibility:4,buffer:{type:'uniform'}}]});
     const bBGLayout = device.createBindGroupLayout({entries:[
       {binding:0,visibility:4,buffer:{type:'read-only-storage'}}]});
+    const waveBGLayout = device.createBindGroupLayout({entries:[
+      {binding:0,visibility:4,buffer:{type:'read-only-storage'}}]});
 
     const compPipe=device.createComputePipeline({
-      layout:device.createPipelineLayout({bindGroupLayouts:[cBGLayout,uBGLayout,bBGLayout]}),
+      layout:device.createPipelineLayout({bindGroupLayouts:[cBGLayout,uBGLayout,bBGLayout,waveBGLayout]}),
       compute:{module:device.createShaderModule({code:compCode}),entryPoint:'main'}
     });
     const rBGLayout=device.createBindGroupLayout({entries:[
@@ -287,7 +307,7 @@ fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-a
     */
 
     /* beacon storage ----------------------------------------------------*/
-    // x,y,freq,amp,decay,phase,_1,_2
+    // x,y,freq,amp,decay,phase,grid,useWave
     const B_STRIDE=8, 
           beaconBytes=MAX_BEACONS*B_STRIDE*4,
           beaconArr = new Float32Array(beaconBytes/4);
@@ -297,14 +317,26 @@ fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-a
       usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
     queue.writeBuffer(beaconBuf,0,beaconArr);
 
+    const waveBytes = MAX_BEACONS * WAVE_LEN * 4;
+    const waveArr   = new Float32Array(waveBytes / 4);
+    for (let i = 0; i < MAX_BEACONS; ++i) {
+      for (let j = 0; j < WAVE_LEN; ++j) {
+        waveArr[i * WAVE_LEN + j] = Math.sin(2 * Math.PI * j / WAVE_LEN);
+      }
+    }
+    const waveBuf = device.createBuffer({size:waveBytes,
+      usage:GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST});
+    queue.writeBuffer(waveBuf, 0, waveArr);
+
     /* helpers -----------------------------------------------------------*/
     const DEFAULTS={freq:1, amp:100, decay:0.1, phase:0.0};
     const uploadBeacons=()=>queue.writeBuffer(beaconBuf,0,beaconArr);
+    const uploadWaves  =()=>queue.writeBuffer(waveBuf,0,waveArr);
     function beaconOffset(i){return i*B_STRIDE;}
     function createBeacon(i,x,y,f=DEFAULTS.freq,a=DEFAULTS.amp,d=DEFAULTS.decay,
                           p=DEFAULTS.phase,grid=0){
       const o = beaconOffset(i);
-      beaconArr.set([x,y,f,a,d,p,grid], o);      // <─ include flag
+      beaconArr.set([x,y,f,a,d,p,grid,0], o);
     }
     function getGrid(i){ return beaconArr[beaconOffset(i)+GRID_FLAG] > 0.5; }
     function setGrid(i,val){
@@ -427,6 +459,23 @@ fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-a
        {position:'absolute',left:`${x+12}px`,top:`${y+12}px`,zIndex:1000});
       gui.title(title); activePanel=gui; return gui;
     }
+
+    function loadCSVForBeacon(i){
+      const el = Object.assign(document.createElement('input'),
+                               {type:'file', accept:'.csv,.txt'});
+      el.click();
+      el.onchange = () => el.files?.[0]?.text().then(txt => {
+        const nums = txt.trim().split(/[,\s]+/).map(Number).filter(n=>!isNaN(n));
+        if(nums.length===0) return;
+        const base = i * WAVE_LEN;
+        for(let j=0;j<WAVE_LEN;j++){
+          waveArr[base+j] = nums[j % nums.length];
+        }
+        beaconArr[beaconOffset(i)+WAVE_FLAG] = 1;
+        uploadWaves();
+        uploadBeacons();
+      });
+    }
     function openBeaconEditor(idx, px, py) {
       closePanel();
 
@@ -439,7 +488,8 @@ fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-a
         decay: beaconArr[o + 4],
         phase: beaconArr[o + 5],
 
-        grid : !!beaconArr[o + GRID_FLAG],       // ← NEW
+        grid : !!beaconArr[o + GRID_FLAG],
+        useWave: !!beaconArr[o + WAVE_FLAG],
 
         get realHz(){ return (this.freq * simParams.dt * fps).toFixed(2); }
       };
@@ -461,6 +511,12 @@ fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-a
       /* read-only field that keeps refreshing because of .listen() */
       gui.add(proxy, 'realHz').name('real Hz (freq x dt x FPS)').listen();
 
+      gui.add(proxy, 'useWave')
+        .name('use CSV wave')
+        .onChange(v => { beaconArr[o + WAVE_FLAG] = v ? 1 : 0; uploadBeacons(); });
+
+      gui.add({ loadCSV(){ loadCSVForBeacon(idx); } }, 'loadCSV').name('📄 Load CSV');
+
       gui.add(proxy,'grid')
         .name('λ-grid')
         .onChange(v => setGrid(idx, v));
@@ -481,6 +537,7 @@ fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-a
       const proxy = {
         ...DEFAULTS,           // freq, amp, decay defaults
         phase : 0,             // new slider starts at 0 rad
+        useWave : false,
 
         /* live preview of wall-clock frequency */
         get realHz () {
@@ -496,6 +553,9 @@ fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-a
             proxy.decay,
             proxy.phase
           );
+          if (proxy.useWave) {
+            beaconArr[beaconOffset(beaconCount)+WAVE_FLAG] = 1;
+          }
           beaconCount++;
           uploadBeacons();
           closePanel();
@@ -508,6 +568,7 @@ fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-a
       gui.add(proxy, 'amp'  , 0.01, 200, 0.0001);
       gui.add(proxy, 'decay', 0.01, 3, 0.0001);
       gui.add(proxy, 'phase', -Math.PI, Math.PI, 0.0001);
+      gui.add(proxy, 'useWave').name('use CSV wave');
       gui.add(proxy, 'realHz').name('freq (Hz)').listen();   // read-only, auto-updates
       gui.add(proxy, 'add').name('➕ Create');
     }
@@ -779,7 +840,8 @@ fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-a
         const blob={
           particleCount,kindCount,preset,simParams,
           forces:Array.from(fData),beaconCount,
-          beacons:Array.from(beaconArr.slice(0,beaconCount*B_STRIDE))
+          beacons:Array.from(beaconArr.slice(0,beaconCount*B_STRIDE)),
+          waves   : Array.from(waveArr)
         };
         localStorage.setItem('particleSimSave',JSON.stringify(blob));
         alert('Saved to browser cache.');
@@ -798,7 +860,8 @@ fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-a
           },
           forces        : '[radius, strength] pairs for every kind × kind interaction.',
           beaconCount   : 'Number of active beacons in `beacons[]`.',
-          beacons       : 'Flattened array of beacons: [x, y, freq, amp, decay, phase] …'
+          beacons       : 'Flattened array of beacons: [x, y, freq, amp, decay, phase, grid, useWave] …',
+          waves         : `Waveform samples per beacon (${WAVE_LEN} each)`
         };
         const json=JSON.stringify(data,null,2);
         try{await navigator.clipboard.writeText(json);
@@ -825,6 +888,8 @@ fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-a
       entries:[{binding:0,resource:{buffer:uBuf}}]});
     const beaconBG=device.createBindGroup({layout:bBGLayout,
       entries:[{binding:0,resource:{buffer:beaconBuf}}]});
+    const waveBG = device.createBindGroup({layout:waveBGLayout,
+      entries:[{binding:0,resource:{buffer:waveBuf}}]});
     const rBG_A=device.createBindGroup({layout:rBGLayout,
       entries:[{binding:0,resource:{buffer:bufA}}]});
     const rBG_B=device.createBindGroup({layout:rBGLayout,
@@ -840,6 +905,7 @@ fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-a
       cp.setBindGroup(0,flip?compBG_B:compBG_A);
       cp.setBindGroup(1,simBG);
       cp.setBindGroup(2,beaconBG);
+      cp.setBindGroup(3,waveBG);
       cp.dispatchWorkgroups(Math.ceil(particleCount/256));
       cp.end();
 
