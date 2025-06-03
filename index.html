@@ -53,10 +53,12 @@
   }
 
   /* ---------- setup state & GUI --------------- */
+
   const MAX_BEACONS=16
   const GRID_FLAG = 6;
   const WAVE_FLAG = 7;
   const WAVE_LEN  = 256;
+
   const setup = {
     particleCount : 65_536,
     kindCount     : 2,
@@ -165,6 +167,7 @@
     }
 
     /* WGSL shaders (generated) -----------------------------------------*/
+
     const compCode = `struct P{ x:f32,y:f32,vx:f32,vy:f32,kind:f32 };
 struct F{radius:f32,strength:f32};
 struct S{ dt:f32, friction:f32, w:f32, h:f32, t:f32, bc:f32, C:f32, _0:f32 };
@@ -188,6 +191,7 @@ fn waveLookup(base:u32, ang:f32)->f32{
   let a1=wv[off + ((i+1u)%WAVE_LEN)];
   return a0*(1.0-f)+a1*f;
 }
+
 @compute @workgroup_size(256)fn main(@builtin(global_invocation_id)gid:vec3<u32>){
   let i=gid.x; if(i>=arrayLength(&src)){return;}
   var p=src[i]; var a=vec2<f32>(0.0);
@@ -200,6 +204,7 @@ fn waveLookup(base:u32, ang:f32)->f32{
     if(r<fp.radius){ a+=normalize(d)*fp.strength*(1.0-r/fp.radius);} }
   let bc=u32(sim.bc);
   let C=sim.C;
+
   for(var k:u32=0u;k<bc;k++){
     let b=be[k]; let d=vec2<f32>(p.x-b.x,p.y-b.y); let r=length(d);
     if(r<1e-3){continue;}
@@ -208,6 +213,7 @@ fn waveLookup(base:u32, ang:f32)->f32{
     if(b.useWave>0.5){ w=waveLookup(k, ang); }
     let press=b.a*w/pow(r+1.0,b.d);
     a+=normalize(d)*press; }
+
   p.vx=(p.vx+a.x*sim.dt)*sim.friction; p.vy=(p.vy+a.y*sim.dt)*sim.friction;
   p.x+=p.vx*sim.dt; p.y+=p.vy*sim.dt;
   if(p.x<0.0){p.x=0.0;p.vx=-p.vx;} if(p.x>sim.w){p.x=sim.w;p.vx=-p.vx;}
@@ -306,6 +312,7 @@ fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-a
     Raise C → the pulses spread outward faster and the wavelength grows, yet the oscillation period at any fixed point stays the same.
     */
 
+
     /* beacon storage ----------------------------------------------------*/
     // x,y,freq,amp,decay,phase,grid,useWave
     const B_STRIDE=8, 
@@ -316,6 +323,17 @@ fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-a
     const beaconBuf=device.createBuffer({size:beaconBytes,
       usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
     queue.writeBuffer(beaconBuf,0,beaconArr);
+
+    const waveBytes = MAX_BEACONS * WAVE_LEN * 4;
+    const waveArr   = new Float32Array(waveBytes / 4);
+    for (let i = 0; i < MAX_BEACONS; ++i) {
+      for (let j = 0; j < WAVE_LEN; ++j) {
+        waveArr[i * WAVE_LEN + j] = Math.sin(2 * Math.PI * j / WAVE_LEN);
+      }
+    }
+    const waveBuf = device.createBuffer({size:waveBytes,
+      usage:GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST});
+    queue.writeBuffer(waveBuf, 0, waveArr);
 
     const waveBytes = MAX_BEACONS * WAVE_LEN * 4;
     const waveArr   = new Float32Array(waveBytes / 4);
@@ -521,6 +539,12 @@ fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-a
 
       /* read-only field that keeps refreshing because of .listen() */
       gui.add(proxy, 'realHz').name('real Hz (freq x dt x FPS)').listen();
+
+      gui.add(proxy, 'useWave')
+        .name('use CSV wave')
+        .onChange(v => { beaconArr[o + WAVE_FLAG] = v ? 1 : 0; uploadBeacons(); });
+
+      gui.add({ loadCSV(){ loadCSVForBeacon(idx); } }, 'loadCSV').name('📄 Load CSV');
 
       gui.add(proxy, 'useWave')
         .name('use CSV wave')
