@@ -452,18 +452,7 @@ fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-a
     }
     let activePanel=null;
     function closePanel(){ activePanel?.destroy(); activePanel=null; }
-        const lines = txt.trim().split(/\r?\n/);
-        const rows  = lines.map(l => l.trim().split(/[,\s]+/).map(Number));
-        const colCount = Math.max(0, ...rows.map(r => r.length));
-        if(colCount === 0) return;
-        const choice = prompt(`Which column (1-${colCount})?`, '1');
-        let col = parseInt(choice, 10) - 1;
-        if(isNaN(col) || col < 0 || col >= colCount) return;
-        const nums = [];
-        for (const r of rows) {
-          const v = r[col];
-          if(!isNaN(v)) nums.push(v);
-        }
+    function makePanel(title,x,y){
       const gui=new GUI({width:180,autoPlace:false});
       document.body.appendChild(gui.domElement);
       Object.assign(gui.domElement.style,
