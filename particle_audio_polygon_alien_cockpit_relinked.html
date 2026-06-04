@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>WebGPU Particle-Life + Sound-Wave Beacons</title>
+  <title>WebGPU Particle-Life // Alien Cockpit</title>
   <style>
     body   { margin:0; background:#000; overflow:hidden; position:relative;
              color:#ddd; font-family:system-ui; }
@@ -121,6 +121,114 @@
     }
     .force-legend .chip { display:inline-flex; align-items:center; gap:5px; }
     .force-legend .swatch { width:24px; height:9px; border:1px solid rgba(255,255,255,.25); display:inline-block; }
+
+
+    /* ───────────── Alien cockpit / mobile-leaning polish ───────────── */
+    html, body { width:100%; height:100%; overscroll-behavior:none; }
+    #sim, #overlay {
+      position:fixed; inset:0; width:100vw; height:100dvh;
+      max-width:none; max-height:none; touch-action:none;
+    }
+    #sim { cursor:crosshair; background:#000; }
+    .alien-cockpit, .alien-morph, .alien-toast {
+      font-family:"IBM VGA 8x16", "Fira Code", "Cascadia Mono", "Courier New", monospace;
+      color:#baffc8; text-shadow:0 0 9px rgba(124,255,155,.42);
+      letter-spacing:.02em; user-select:none;
+    }
+    .alien-cockpit {
+      position:fixed; top:14px; left:14px; z-index:820; width:min(392px, calc(100vw - 28px));
+      background:
+        radial-gradient(circle at 100% 0%, rgba(109,252,255,.16), transparent 28%),
+        radial-gradient(circle at 0% 100%, rgba(255,216,102,.10), transparent 30%),
+        linear-gradient(180deg, rgba(0,18,7,.88), rgba(0,5,2,.84));
+      border:1px solid rgba(124,255,155,.72); box-shadow:0 0 0 1px rgba(0,0,0,.92) inset, 0 0 34px rgba(47,196,90,.24);
+      backdrop-filter:blur(7px); -webkit-backdrop-filter:blur(7px);
+    }
+    .alien-cockpit::after, .alien-morph::after {
+      content:""; position:absolute; inset:0; pointer-events:none;
+      background:repeating-linear-gradient(180deg, rgba(255,255,255,.035) 0, rgba(255,255,255,.035) 1px, transparent 1px, transparent 5px);
+      opacity:.22; mix-blend-mode:screen;
+    }
+    .alien-title {
+      display:flex; align-items:center; justify-content:space-between; gap:8px;
+      padding:8px 10px; color:var(--dos-cyan); text-transform:uppercase; border-bottom:1px solid rgba(109,252,255,.34);
+      background:linear-gradient(90deg, rgba(0,255,102,.13), rgba(0,255,255,.06));
+    }
+    .alien-title strong { font-size:13px; }
+    .alien-title .glyph { color:var(--dos-amber); }
+    .alien-cockpit button, .alien-morph button {
+      background:#021207; color:var(--dos-green); border:1px solid rgba(124,255,155,.48); border-radius:0;
+      padding:6px 8px; font:inherit; cursor:pointer; text-transform:uppercase;
+    }
+    .alien-cockpit button:hover, .alien-morph button:hover { border-color:var(--dos-cyan); color:#eaffef; background:#073516; }
+    .alien-cockpit button.active, .alien-morph button.active { background:var(--dos-green); color:#001904; text-shadow:none; border-color:#d8ffe1; }
+    .alien-body { padding:9px 10px 10px; display:grid; gap:9px; }
+    .alien-readouts { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:6px; }
+    .alien-readout { border:1px solid rgba(124,255,155,.22); background:rgba(0,0,0,.32); padding:6px; min-width:0; }
+    .alien-readout span { display:block; color:rgba(186,255,200,.72); font-size:10px; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .alien-readout b { display:block; color:var(--dos-amber); font-size:14px; margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .alien-relation {
+      display:grid; grid-template-columns:1fr auto 1fr; gap:6px; align-items:center;
+      border:1px solid rgba(109,252,255,.38); background:rgba(0,20,16,.42); padding:7px;
+    }
+    .alien-relation .kind-pill { text-align:center; border:1px solid rgba(124,255,155,.32); background:rgba(0,0,0,.35); padding:5px 6px; color:#effff2; }
+    .alien-relation .arrow { color:var(--dos-amber); text-align:center; font-weight:800; }
+    .alien-commands { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:6px; }
+    .alien-guidance { min-height:34px; border:1px dashed rgba(124,255,155,.32); background:rgba(0,255,102,.045); padding:7px 8px; color:#d8ffdf; }
+    .alien-guidance b { color:var(--dos-cyan); }
+    .alien-morph {
+      position:fixed; right:14px; bottom:14px; z-index:830; width:min(300px, calc(100vw - 28px));
+      background:linear-gradient(180deg, rgba(0,14,8,.90), rgba(0,5,6,.86));
+      border:1px solid rgba(109,252,255,.62); box-shadow:0 0 28px rgba(109,252,255,.22), 0 0 0 1px rgba(0,0,0,.92) inset;
+      backdrop-filter:blur(7px); -webkit-backdrop-filter:blur(7px);
+    }
+    .alien-morph-head { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:7px 9px; border-bottom:1px solid rgba(109,252,255,.28); color:var(--dos-cyan); text-transform:uppercase; }
+    .alien-pad-wrap { padding:10px; }
+    .alien-pad {
+      position:relative; height:190px; border:1px solid rgba(124,255,155,.45);
+      background:
+        linear-gradient(90deg, rgba(124,255,155,.12), transparent 45%, rgba(255,77,125,.12)),
+        linear-gradient(0deg, rgba(109,252,255,.08), transparent 50%, rgba(255,216,102,.14)),
+        repeating-linear-gradient(90deg, rgba(255,255,255,.05) 0, rgba(255,255,255,.05) 1px, transparent 1px, transparent 24px),
+        repeating-linear-gradient(0deg, rgba(255,255,255,.045) 0, rgba(255,255,255,.045) 1px, transparent 1px, transparent 24px),
+        rgba(0,0,0,.42);
+      touch-action:none; cursor:crosshair; overflow:hidden;
+    }
+    .alien-pad::before, .alien-pad::after { content:""; position:absolute; background:rgba(109,252,255,.34); pointer-events:none; }
+    .alien-pad::before { left:50%; top:0; bottom:0; width:1px; }
+    .alien-pad::after { top:50%; left:0; right:0; height:1px; }
+    .alien-knob {
+      position:absolute; left:50%; top:50%; width:20px; height:20px; margin:-10px 0 0 -10px; border-radius:50%;
+      border:2px solid var(--dos-amber); box-shadow:0 0 16px rgba(255,216,102,.75), 0 0 0 7px rgba(255,216,102,.10);
+      background:rgba(255,216,102,.18); pointer-events:none;
+    }
+    .alien-axis { position:absolute; font-size:10px; color:rgba(234,255,240,.76); text-transform:uppercase; pointer-events:none; }
+    .alien-axis.left { left:7px; top:50%; transform:translateY(-50%); }
+    .alien-axis.right { right:7px; top:50%; transform:translateY(-50%); }
+    .alien-axis.top { top:6px; left:50%; transform:translateX(-50%); }
+    .alien-axis.bottom { bottom:6px; left:50%; transform:translateX(-50%); }
+    .alien-morph-readout { display:flex; justify-content:space-between; gap:8px; margin-top:8px; color:#baffc8; font-size:11px; }
+    .alien-toast {
+      position:fixed; left:50%; bottom:18px; transform:translateX(-50%); z-index:910; max-width:min(620px, calc(100vw - 28px));
+      padding:9px 12px; border:1px solid rgba(255,216,102,.65); background:rgba(16,10,0,.82); color:#fff2b8;
+      box-shadow:0 0 24px rgba(255,216,102,.22); opacity:0; pointer-events:none; transition:opacity .18s linear;
+    }
+    .alien-toast.visible { opacity:1; }
+    .alien-hidden { display:none !important; }
+    .alien-collapsed .alien-body { display:none; }
+    @media (max-width: 760px), (pointer: coarse) {
+      .lil-gui.root { max-height:42dvh; overflow:auto; right:8px !important; top:8px !important; width:min(320px, calc(100vw - 16px)) !important; font-size:12px; }
+      .alien-cockpit { top:8px; left:8px; width:calc(100vw - 16px); }
+      .alien-readouts { grid-template-columns:repeat(2, minmax(0,1fr)); }
+      .alien-commands { grid-template-columns:repeat(3, minmax(0,1fr)); }
+      .alien-morph { left:8px; right:8px; bottom:8px; width:auto; }
+      .alien-pad { height:145px; }
+      .force-panel { left:8px !important; right:8px !important; bottom:172px !important; width:auto !important; max-height:54dvh; }
+      .force-toolbar { grid-template-columns:1fr; }
+      .force-mode-row { grid-template-columns:repeat(2, minmax(0,1fr)); }
+      .force-cell { width:64px; height:46px; }
+    }
+
   </style>
 </head>
 <body>
@@ -139,6 +247,8 @@
    *********************************************************************/
   const mask   = document.getElementById('setupMask');
   const stored = localStorage.getItem('particleSimSave');
+  const isCoarsePointer = window.matchMedia?.('(pointer: coarse)').matches ?? false;
+  const setupProfiles = { Pocket:4096, Phone:16384, Tablet:32768, Desktop:65536 };
 
   /* ---------- helpers -------------------------- */
   const tryStart = txt => {
@@ -168,7 +278,8 @@
   const WAVE_FLAG = 7;
   const WAVE_LEN  = 256;
   const setup = {
-    particleCount : 65_536,
+    profile       : isCoarsePointer ? 'Phone' : 'Desktop',
+    particleCount : isCoarsePointer ? setupProfiles.Phone : setupProfiles.Desktop,
     kindCount     : 2,
     preset        : 'Random',             // Random | Sand
     boundarySides : 64,                   // 128 is visually close to a circle
@@ -186,7 +297,12 @@
                  })
   };
   const preGUI = new GUI({ width:300, container:mask }).title('Simulation Setup');
-  preGUI.add(setup,'particleCount',1024,1<<16,1024).name('# Particles');
+  let setupParticleCtrl = null;
+  preGUI.add(setup,'profile',Object.keys(setupProfiles)).name('Performance profile').onChange(v => {
+    setup.particleCount = setupProfiles[v] ?? setup.particleCount;
+    setupParticleCtrl?.updateDisplay();
+  });
+  setupParticleCtrl = preGUI.add(setup,'particleCount',1024,1<<16,1024).name('# Particles');
   preGUI.add(setup,'kindCount',1,6,1).name('# Kinds');
   preGUI.add(setup,'preset',['Random','Sand']).name('Preset');
   preGUI.add(setup,'boundarySides',3,128,1).name('Boundary sides');
@@ -226,8 +342,30 @@
       sides    : Math.max(3, Math.min(128, Math.round(cfg.boundary?.sides ?? cfg.boundarySides ?? 64))),
       radius   : cfg.boundary?.radius   ?? Math.min(domain.w, domain.h) * 0.48,
       rotation : cfg.boundary?.rotation ?? -Math.PI / 2,
-      bounce   : cfg.boundary?.bounce   ?? 1.0
+      bounce   : cfg.boundary?.bounce   ?? 1.0,
+      keepBeaconsInside : cfg.boundary?.keepBeaconsInside ?? true
     };
+    const alienState = {
+      hud:true, morphPad:true, guidance:true, relationshipSpotlight:true, beaconAuras:true,
+      labVisible:true, paused:false, morphX:0.5, morphY:0.5, morphVisuals:true, morphIntensity:1.0,
+      ...(cfg.alienUI ?? {})
+    };
+    const selectedRelation = { a:0, b:0, active:false };
+    const hoverRelation = { a:0, b:0, active:false };
+    function setHoverRelation(a,b){
+      hoverRelation.a = a;
+      hoverRelation.b = b;
+      hoverRelation.active = true;
+      updateAlienHud();
+    }
+    function clearHoverRelation(){
+      if (!hoverRelation.active) return;
+      hoverRelation.active = false;
+      updateAlienHud();
+      try { updateHeatmapReadouts?.(); } catch {}
+    }
+    let updateAlienHud = () => {};
+    let syncAlienPanels = () => {};
     function pointInsideBoundary(x, y) {
       const n  = Math.max(3, Math.min(128, Math.round(boundary.sides)));
       const cx = domain.w * 0.5, cy = domain.h * 0.5, R = boundary.radius;
@@ -242,6 +380,27 @@
         if ((x - ax) * nx + (y - ay) * ny > 0) return false;
       }
       return true;
+    }
+    function clampPointToBoundary(x, y, pad = 4) {
+      let px = Number.isFinite(x) ? x : domain.w * 0.5;
+      let py = Number.isFinite(y) ? y : domain.h * 0.5;
+      const n  = Math.max(3, Math.min(128, Math.round(boundary.sides)));
+      const cx = domain.w * 0.5, cy = domain.h * 0.5;
+      const R  = Math.max(8, boundary.radius);
+      for (let pass = 0; pass < 4; ++pass) {
+        for (let k = 0; k < n; ++k) {
+          const a0 = boundary.rotation + Math.PI * 2 * k / n;
+          const a1 = boundary.rotation + Math.PI * 2 * (k + 1) / n;
+          const ax = cx + R * Math.cos(a0), ay = cy + R * Math.sin(a0);
+          const bx = cx + R * Math.cos(a1), by = cy + R * Math.sin(a1);
+          const ex = bx - ax, ey = by - ay;
+          const len = Math.hypot(ex, ey) || 1;
+          const nx = ey / len, ny = -ex / len; // outward normal, matching the WGSL boundary test
+          const d = (px - ax) * nx + (py - ay) * ny;
+          if (d > -pad) { px -= nx * (d + pad); py -= ny * (d + pad); }
+        }
+      }
+      return [Math.max(0, Math.min(domain.w, px)), Math.max(0, Math.min(domain.h, py))];
     }
     function randomPointInBoundary() {
       const cx = domain.w * 0.5, cy = domain.h * 0.5, R = boundary.radius;
@@ -259,8 +418,16 @@
     scale factor             =  dt × FPS
     */
     /*************************  SECTION 1A ─ GPU CORE ************************/
-    if (!navigator.gpu) { alert('WebGPU not enabled'); throw new Error('no GPU'); }
+    if (!navigator.gpu) {
+      mask?.remove?.();
+      document.body.innerHTML = '<div style="display:grid;place-items:center;min-height:100dvh;background:#000;color:#7cff9b;font:16px monospace;text-align:center;padding:24px"><div style="max-width:720px;border:1px solid #7cff9b;padding:24px;box-shadow:0 0 30px #2fc45a55"><h1 style="color:#6dfcff">WEBGPU SIGNAL NOT FOUND</h1><p>This build needs a browser/device with WebGPU enabled. Try a modern Chromium-based browser or a current Safari build on supported hardware.</p><p style="color:#ffd866">No simulation state was changed.</p></div></div>';
+      throw new Error('no GPU');
+    }
     const adapter = await navigator.gpu.requestAdapter();
+    if (!adapter) {
+      document.body.innerHTML = '<div style="display:grid;place-items:center;min-height:100dvh;background:#000;color:#7cff9b;font:16px monospace;text-align:center;padding:24px"><div style="max-width:720px;border:1px solid #7cff9b;padding:24px;box-shadow:0 0 30px #2fc45a55"><h1 style="color:#6dfcff">GPU ADAPTER NOT ACCEPTED</h1><p>The browser exposes WebGPU, but this device/session did not provide a usable adapter.</p><p style="color:#ffd866">Try a lower profile, another browser, or plugged-in performance mode.</p></div></div>';
+      throw new Error('no GPU adapter');
+    }
     const device  = await adapter.requestDevice();
     const queue   = device.queue;
 
@@ -501,7 +668,7 @@ fn waveLookup(base:u32, ang:f32)->f32{
   dst[i]=p; }`;
 
     const vertShader = `struct P{ x:f32,y:f32,vx:f32,vy:f32,kind:f32 };
-struct R{ particleGain:f32, _0:f32, _1:f32, _2:f32 };
+struct R{ particleGain:f32, selectedA:f32, selectedB:f32, relation:f32 };
 @group(0)@binding(0)var<storage,read>ps:array<P>;
 @group(1)@binding(0)var<uniform>ren:R;
 struct O{@builtin(position)pos:vec4<f32>,@location(0)kind:f32};
@@ -510,7 +677,16 @@ struct O{@builtin(position)pos:vec4<f32>,@location(0)kind:f32};
   o.pos=vec4<f32>((p.x/${domain.w}.0)*2.0-1.0, 1.0-(p.y/${domain.h}.0)*2.0,0,1);
   o.kind=p.kind; return o;}
 fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-abs(h*6.0-2.0),0,1); let b=clamp(2.0-abs(h*6.0-4.0),0,1); return vec3<f32>(r,g,b);}
-@fragment fn fs(i:O)->@location(0)vec4<f32>{ let c=hue(i.kind/${kindCount}.0)*ren.particleGain; return vec4<f32>(c,1);} `;
+@fragment fn fs(i:O)->@location(0)vec4<f32>{
+  var c=hue(i.kind/${kindCount}.0)*ren.particleGain;
+  let isA=select(0.0,1.0,abs(i.kind-ren.selectedA)<0.5);
+  let isB=select(0.0,1.0,abs(i.kind-ren.selectedB)<0.5);
+  let rel=clamp(ren.relation,0.0,1.0);
+  let h=max(isA,isB)*rel;
+  let marker=isA*vec3<f32>(1.0,0.85,0.25)+isB*vec3<f32>(0.2,0.95,1.0);
+  c=mix(c*mix(1.0,0.45,rel), c+marker*0.82, h);
+  return vec4<f32>(c,1);
+} `;
 
     const screenShader = `struct Params{ gain:f32, _0:f32, _1:f32, _2:f32 };
 @group(0)@binding(0)var srcTex:texture_2d<f32>;
@@ -668,6 +844,7 @@ struct O{@builtin(position)pos:vec4<f32>,@location(0)uv:vec2<f32>};
     function createBeacon(i,x,y,f=DEFAULTS.freq,a=DEFAULTS.amp,d=DEFAULTS.decay,
                           p=DEFAULTS.phase,grid=0){
       const o = beaconOffset(i);
+      if (boundary.keepBeaconsInside) [x, y] = clampPointToBoundary(x, y, 6);
       beaconArr.set([x,y,f,a,d,p,grid,0], o);
     }
     function getGrid(i){ return beaconArr[beaconOffset(i)+GRID_FLAG] > 0.5; }
@@ -676,7 +853,18 @@ struct O{@builtin(position)pos:vec4<f32>,@location(0)uv:vec2<f32>};
       uploadBeacons();                // keep buffer in-sync
     }
     function updateBeaconPos(i,x,y){
+      if (boundary.keepBeaconsInside) [x, y] = clampPointToBoundary(x, y, 6);
       const o=beaconOffset(i); beaconArr[o]=x; beaconArr[o+1]=y; }
+    function normalizeBeaconPositions(){
+      if (!boundary.keepBeaconsInside) return;
+      for (let i = 0; i < beaconCount; ++i) {
+        const o = beaconOffset(i);
+        const [bx, by] = clampPointToBoundary(beaconArr[o], beaconArr[o + 1], 6);
+        beaconArr[o] = bx; beaconArr[o + 1] = by;
+      }
+    }
+    normalizeBeaconPositions();
+    uploadBeacons();
     function copyBeacon(idx){
       if (beaconCount>=MAX_BEACONS) return -1;
       const oSrc=beaconOffset(idx), oDst=beaconOffset(beaconCount);
@@ -705,12 +893,9 @@ struct O{@builtin(position)pos:vec4<f32>,@location(0)uv:vec2<f32>};
     let rectStart=[0,0],rectEnd=[0,0],dragStart=[0,0],
         groupInitPos=new Map();
     function clearSelection(){selected.clear(); drawOverlay();}
-    function drawBoundaryOverlay(){
+    function traceBoundaryPath(pad = 0){
       const n  = Math.max(3, Math.min(128, Math.round(boundary.sides)));
-      const cx = domain.w * 0.5, cy = domain.h * 0.5, R = boundary.radius;
-      octx.save();
-      octx.strokeStyle = 'rgba(255,255,255,0.35)';
-      octx.lineWidth = 2;
+      const cx = domain.w * 0.5, cy = domain.h * 0.5, R = Math.max(8, boundary.radius - pad);
       octx.beginPath();
       for (let k = 0; k < n; ++k) {
         const a = boundary.rotation + Math.PI * 2 * k / n;
@@ -718,12 +903,95 @@ struct O{@builtin(position)pos:vec4<f32>,@location(0)uv:vec2<f32>};
         if (k === 0) octx.moveTo(x, y); else octx.lineTo(x, y);
       }
       octx.closePath();
+    }
+    function clipOverlayToBoundary(){
+      traceBoundaryPath(0);
+      octx.clip();
+    }
+    function drawBoundaryOverlay(){
+      octx.save();
+      octx.strokeStyle = 'rgba(255,255,255,0.35)';
+      octx.lineWidth = 2;
+      traceBoundaryPath(0);
       octx.stroke();
+      octx.restore();
+    }
+    function positiveMod(x, m){ return ((x % m) + m) % m; }
+    function drawBeaconAuras(){
+      if (!alienState.beaconAuras) return;
+      octx.save();
+      clipOverlayToBoundary();
+      const maxVisibleR = Math.hypot(domain.w, domain.h);
+      for (let i = 0; i < beaconCount; ++i) {
+        const o = beaconOffset(i);
+        const x = beaconArr[o], y = beaconArr[o + 1];
+        const freq = Math.max(0.001, Math.abs(beaconArr[o + 2]));
+        const amp = Math.max(0, Math.abs(beaconArr[o + 3] * simParams.beaconScale));
+        const decay = Math.max(0.001, beaconArr[o + 4]);
+        const phase = beaconArr[o + 5] || 0;
+        const selectedBeacon = selected.has(i) || i === selIdx;
+        const lambda = Math.max(5, simParams.C / freq);
+        const phasePx = positiveMod(simParams.C * simTime + phase * lambda / (Math.PI * 2), lambda);
+        const core = Math.max(6, Math.min(30, 5 + Math.sqrt(amp + 1) * 1.8));
+
+        // Core signal organ: this marks the actual force source used by the compute shader.
+        const grad = octx.createRadialGradient(x, y, 1, x, y, core * 2.2);
+        grad.addColorStop(0, selectedBeacon ? 'rgba(255,216,102,.48)' : 'rgba(109,252,255,.34)');
+        grad.addColorStop(0.62, selectedBeacon ? 'rgba(255,216,102,.13)' : 'rgba(124,255,155,.10)');
+        grad.addColorStop(1, 'rgba(0,0,0,0)');
+        octx.fillStyle = grad;
+        octx.beginPath();
+        octx.arc(x, y, core * 2.2, 0, Math.PI * 2);
+        octx.fill();
+
+        // Physics-coupled wavefronts. Same phase relation as WGSL:
+        // ang = TAU * freq * (simTime - distance / C) + phase.
+        for (let rr = Math.max(4, phasePx); rr < maxVisibleR; rr += lambda) {
+          const falloff = 1 / Math.pow(rr + 1, decay);
+          const alpha = Math.max(0.014, Math.min(selectedBeacon ? 0.50 : 0.24, amp * falloff * 0.011));
+          octx.strokeStyle = `rgba(${selectedBeacon ? '255,216,102' : '109,252,255'},${alpha.toFixed(3)})`;
+          octx.lineWidth = selectedBeacon ? 1.6 : 1;
+          octx.beginPath();
+          octx.arc(x, y, rr, 0, Math.PI * 2);
+          octx.stroke();
+        }
+        if (beaconArr[o + WAVE_FLAG] > 0.5) {
+          octx.strokeStyle = selectedBeacon ? 'rgba(255,216,102,.55)' : 'rgba(124,255,155,.28)';
+          octx.setLineDash([3, 5]);
+          octx.beginPath();
+          octx.arc(x, y, core + 13, 0, Math.PI * 2);
+          octx.stroke();
+          octx.setLineDash([]);
+        }
+      }
+      octx.restore();
+    }
+    function drawBeaconGridOverlay(){
+      let any = false;
+      for (let i = 0; i < beaconCount; ++i) if (getGrid(i)) { any = true; break; }
+      if (!any) return;
+      octx.save();
+      clipOverlayToBoundary();
+      octx.strokeStyle = 'rgba(255,255,255,0.13)';
+      octx.lineWidth = 1;
+      for (let i = 0; i < beaconCount; ++i) {
+        if (!getGrid(i)) continue;
+        const bx = beaconArr[beaconOffset(i)];
+        const by = beaconArr[beaconOffset(i) + 1];
+        const f = Math.max(0.001, Math.abs(beaconArr[beaconOffset(i) + 2] || 1));
+        const lambda = simParams.C / f;
+        if (lambda < 4) continue;
+        for (let x = bx; x >= 0; x -= lambda) { octx.beginPath(); octx.moveTo(x, 0); octx.lineTo(x, domain.h); octx.stroke(); }
+        for (let x = bx + lambda; x <= domain.w; x += lambda) { octx.beginPath(); octx.moveTo(x, 0); octx.lineTo(x, domain.h); octx.stroke(); }
+        for (let y = by; y >= 0; y -= lambda) { octx.beginPath(); octx.moveTo(0, y); octx.lineTo(domain.w, y); octx.stroke(); }
+        for (let y = by + lambda; y <= domain.h; y += lambda) { octx.beginPath(); octx.moveTo(0, y); octx.lineTo(domain.w, y); octx.stroke(); }
+      }
       octx.restore();
     }
     function drawOverlay(){
       octx.clearRect(0,0,oCanvas.width,oCanvas.height);
       drawBoundaryOverlay();
+      drawBeaconAuras();
       if(rectSelect){
         const x0=Math.min(rectStart[0],rectEnd[0]),
               y0=Math.min(rectStart[1],rectEnd[1]),
@@ -748,6 +1016,7 @@ struct O{@builtin(position)pos:vec4<f32>,@location(0)uv:vec2<f32>};
         if (λ < 4) continue;                           // too fine → ignore
 
         octx.save();
+        clipOverlayToBoundary();
         octx.strokeStyle = 'rgba(255,255,255,0.15)';
         octx.lineWidth   = 10;
 
@@ -1162,14 +1431,51 @@ struct O{@builtin(position)pos:vec4<f32>,@location(0)uv:vec2<f32>};
     });
     
     const pos=e=>{
-      const r=canvas.getBoundingClientRect();return[e.clientX-r.left,e.clientY-r.top];
+      const r=canvas.getBoundingClientRect();
+      const sx = domain.w / Math.max(1, r.width);
+      const sy = domain.h / Math.max(1, r.height);
+      return [(e.clientX-r.left)*sx,(e.clientY-r.top)*sy];
     };
     /* ────────── interaction ─────────── */
+    let touchHoldTimer = 0, touchHoldStart = null, touchHoldOpened = false, lastTouchTap = 0, lastTouchHit = -2;
+    function cancelTouchHold(){
+      if (touchHoldTimer) clearTimeout(touchHoldTimer);
+      touchHoldTimer = 0;
+    }
+    function openContextLikeMenu(xSim, ySim, pageX, pageY, closest){
+      if (selected.size > 1) openGroupPanel([...selected], pageX, pageY);
+      else if (closest >= 0) openBeaconEditor(closest, pageX, pageY);
+      else openAddPanel(xSim, ySim, pageX, pageY);
+    }
+    function scheduleTouchHold(e, x, y, hitIdx){
+      if (e.pointerType !== 'touch') return;
+      cancelTouchHold(); touchHoldOpened = false;
+      touchHoldStart = { x, y, pageX:e.pageX, pageY:e.pageY, hitIdx };
+      touchHoldTimer = setTimeout(() => {
+        touchHoldOpened = true;
+        rectSelect = false; dragIdx = -1; dragGroup = false;
+        openContextLikeMenu(touchHoldStart.x, touchHoldStart.y, touchHoldStart.pageX, touchHoldStart.pageY, touchHoldStart.hitIdx);
+        drawOverlay();
+      }, 560);
+    }
 
     canvas.addEventListener('pointerdown',e=>{
       const [x,y]=pos(e);
+      const touchLike = e.pointerType === 'touch' || e.pointerType === 'pen';
+      const hitRadius = touchLike ? 26 : 10;
       let hitIdx=-1;
-      for(let i=0;i<beaconCount;++i){const bx=beaconArr[i*B_STRIDE],by=beaconArr[i*B_STRIDE+1];if((bx-x)**2+(by-y)**2<100){hitIdx=i;break;}}
+      for(let i=0;i<beaconCount;++i){const bx=beaconArr[i*B_STRIDE],by=beaconArr[i*B_STRIDE+1];if((bx-x)**2+(by-y)**2<hitRadius*hitRadius){hitIdx=i;break;}}
+      if (touchLike) {
+        const now = performance.now();
+        if (hitIdx >= 0 && hitIdx === lastTouchHit && now - lastTouchTap < 340) {
+          cancelTouchHold(); touchHoldOpened = true;
+          openContextLikeMenu(x, y, e.pageX, e.pageY, hitIdx);
+          lastTouchTap = 0; lastTouchHit = -2;
+          return;
+        }
+        lastTouchTap = now; lastTouchHit = hitIdx;
+      }
+      scheduleTouchHold(e, x, y, hitIdx);
 
       // Ctrl‑click toggles selection membership ---------------------------
       if(e.ctrlKey && hitIdx>=0){
@@ -1220,6 +1526,9 @@ struct O{@builtin(position)pos:vec4<f32>,@location(0)uv:vec2<f32>};
 
     canvas.addEventListener('pointermove', e=>{
       const [x, y] = pos(e);
+      if (touchHoldTimer && touchHoldStart && e.pointerType === 'touch') {
+        if (Math.hypot(x - touchHoldStart.x, y - touchHoldStart.y) > 18) cancelTouchHold();
+      }
       if (dragIdx >= 0) {
         updateBeaconPos(dragIdx, x, y);
         uploadBeacons();
@@ -1239,6 +1548,8 @@ struct O{@builtin(position)pos:vec4<f32>,@location(0)uv:vec2<f32>};
     });
 
     window.addEventListener('pointerup', e=>{
+      cancelTouchHold();
+      if (touchHoldOpened) { touchHoldOpened = false; dragIdx = -1; dragGroup = false; rectSelect = false; drawOverlay(); return; }
       dragIdx=-1;
       if(dragGroup){ dragGroup=false; groupInitPos.clear(); return; }
       if(rectSelect){
@@ -1261,6 +1572,8 @@ struct O{@builtin(position)pos:vec4<f32>,@location(0)uv:vec2<f32>};
     /* ────────── overlay draw ────────── */
     function drawOverlay(){
       octx.clearRect(0,0,oCanvas.width,oCanvas.height);
+      drawBeaconAuras();
+      drawBeaconGridOverlay();
       drawBoundaryOverlay();
 
       // draw selection rectangle if active
@@ -1284,30 +1597,6 @@ struct O{@builtin(position)pos:vec4<f32>,@location(0)uv:vec2<f32>};
         octx.arc(x,y,6,0,Math.PI*2);
         octx.stroke();
       }
-      for (let i = 0; i < beaconCount; ++i) {
-        if (!getGrid(i)) continue;
-
-        const bx = beaconArr[beaconOffset(i)    ];     // centre X
-        const by = beaconArr[beaconOffset(i) + 1];     // centre Y
-        const f  = beaconArr[beaconOffset(i) + 2] || 1;
-        const λ  = simParams.C / f;                    // pixels
-
-        if (λ < 4) continue;                           // too fine → ignore
-
-        octx.save();
-        octx.strokeStyle = 'rgba(255,255,255,0.15)';
-        octx.lineWidth   = 1;
-
-        /* verticals, anchored on bx */
-        for (let x = bx; x >= 0;           x -= λ) { octx.beginPath(); octx.moveTo(x,0);                 octx.lineTo(x,oCanvas.height); octx.stroke(); }
-        for (let x = bx + λ; x <= oCanvas.width; x += λ) { octx.beginPath(); octx.moveTo(x,0);                 octx.lineTo(x,oCanvas.height); octx.stroke(); }
-
-        /* horizontals, anchored on by */
-        for (let y = by; y >= 0;           y -= λ) { octx.beginPath(); octx.moveTo(0,y);                 octx.lineTo(oCanvas.width,y); octx.stroke(); }
-        for (let y = by + λ; y <= oCanvas.height; y += λ) { octx.beginPath(); octx.moveTo(0,y);                 octx.lineTo(oCanvas.width,y); octx.stroke(); }
-
-        octx.restore();
-      }            
     }
 
     drawOverlay();
@@ -1457,14 +1746,18 @@ struct O{@builtin(position)pos:vec4<f32>,@location(0)uv:vec2<f32>};
     function updateHeatmapReadouts(){
       heatmapState.brushStrength = heatClamp(Number(heatmapState.brushStrength) || 0, 0, 2.5);
       heatmapState.brushRadius = heatClamp(Number(heatmapState.brushRadius) || 0, 0, 180);
-      const sel = selectedForceValues();
+      const baseSel = selectedForceValues();
+      const sel = hoverRelation.active
+        ? { a:hoverRelation.a, b:hoverRelation.b, ...cellValues(hoverRelation.a, hoverRelation.b) }
+        : baseSel;
+      const cellLabel = hoverRelation.active ? 'HOVER' : 'SELECTED';
       const signedBrush = toolSignedStrength();
       if (heatmapStrengthOut) heatmapStrengthOut.textContent = heatmapState.brushStrength.toFixed(3);
       if (heatmapRadiusOut) heatmapRadiusOut.textContent = `${heatmapState.brushRadius.toFixed(1)} px`;
       if (heatmapStrengthNum && Number(heatmapStrengthNum.value) !== heatmapState.brushStrength) heatmapStrengthNum.value = heatmapState.brushStrength.toFixed(3);
       if (heatmapRadiusNum && Number(heatmapRadiusNum.value) !== heatmapState.brushRadius) heatmapRadiusNum.value = heatmapState.brushRadius.toFixed(1);
       if (heatmapStatus) {
-        heatmapStatus.innerHTML = `CELL <b>K${sel.a} ← K${sel.b}</b> &nbsp; strength <b>${fmtSigned(sel.strength,3)}</b> &nbsp; radius <b>${sel.radius.toFixed(1)}px</b>`;
+        heatmapStatus.innerHTML = `${cellLabel} <b>K${sel.a} ← K${sel.b}</b> &nbsp; strength <b>${fmtSigned(sel.strength,3)}</b> &nbsp; radius <b>${sel.radius.toFixed(1)}px</b>`;
       }
       if (heatmapBrushStatus) {
         const radiusWrite = heatmapState.writeRadius ? `radius <b>${heatmapState.brushRadius.toFixed(1)}px</b>` : '<b>radius unchanged</b>';
@@ -1495,6 +1788,9 @@ struct O{@builtin(position)pos:vec4<f32>,@location(0)uv:vec2<f32>};
       return 'linear-gradient(180deg, rgba(55,95,60,.42), rgba(0,20,5,.74))';
     }
     function selectForcePair(a,b, sampleBrush=false){
+      selectedRelation.a = a;
+      selectedRelation.b = b;
+      selectedRelation.active = true;
       forceProxy.pair = forcePairLabel(a,b);
       refreshForceProxy();
       if (sampleBrush) {
@@ -1504,6 +1800,7 @@ struct O{@builtin(position)pos:vec4<f32>,@location(0)uv:vec2<f32>};
       }
       updateHeatmapReadouts();
       updateHeatmapGUI();
+      updateAlienHud();
       scheduleForceHeatmapDraw();
     }
     function applyHeatmapBrush(a,b){
@@ -1597,6 +1894,7 @@ struct O{@builtin(position)pos:vec4<f32>,@location(0)uv:vec2<f32>};
         </div>`;
       document.body.appendChild(heatmapPanel);
       heatmapGrid = heatmapPanel.querySelector('[data-grid]');
+      heatmapGrid.addEventListener('pointerleave', () => { if (!heatmapPainting) clearHoverRelation(); });
       heatmapStatus = heatmapPanel.querySelector('[data-status]');
       heatmapBrushStatus = heatmapPanel.querySelector('[data-brush-status]');
       heatmapStrengthOut = heatmapPanel.querySelector('[data-strength-out]');
@@ -1642,7 +1940,7 @@ struct O{@builtin(position)pos:vec4<f32>,@location(0)uv:vec2<f32>};
       writeRadius.addEventListener('change', e => { heatmapState.writeRadius = e.target.checked; updateHeatmapReadouts(); heatmapWriteRadiusCtrl?.updateDisplay(); });
       mirror.addEventListener('change', e => { heatmapState.mirror = e.target.checked; forceProxy.mirror = e.target.checked; forceMirrorCtrl.updateDisplay(); updateHeatmapReadouts(); heatmapMirrorCtrl?.updateDisplay(); });
       numbers.addEventListener('change', e => { heatmapState.showValues = e.target.checked; drawForceHeatmap(); heatmapShowValuesCtrl?.updateDisplay(); });
-      heatmapPanel.addEventListener('pointerleave', () => { heatmapPainting = false; });
+      heatmapPanel.addEventListener('pointerleave', () => { heatmapPainting = false; clearHoverRelation(); });
       window.addEventListener('pointerup', () => { heatmapPainting = false; });
       const titlebar = heatmapPanel.querySelector('.force-titlebar');
       let drag = null;
@@ -1699,6 +1997,7 @@ struct O{@builtin(position)pos:vec4<f32>,@location(0)uv:vec2<f32>};
           }
           cell.addEventListener('pointerdown', e => {
             e.preventDefault();
+            setHoverRelation(a,b);
             if (heatmapState.tool === 'Inspect / sample' || e.altKey) {
               selectForcePair(a,b,true);
               return;
@@ -1706,8 +2005,9 @@ struct O{@builtin(position)pos:vec4<f32>,@location(0)uv:vec2<f32>};
             heatmapPainting = true;
             applyHeatmapBrush(a,b);
           });
-          cell.addEventListener('pointerenter', () => { if (heatmapPainting) applyHeatmapBrush(a,b); else { selectForcePair(a,b,false); } });
-          cell.addEventListener('wheel', e => nudgeHeatmapCell(a,b,e), { passive:false });
+          cell.addEventListener('pointerenter', () => { if (heatmapPainting) applyHeatmapBrush(a,b); else { setHoverRelation(a,b); updateHeatmapReadouts(); } });
+          cell.addEventListener('pointerleave', () => { if (!heatmapPainting) clearHoverRelation(); });
+          cell.addEventListener('wheel', e => { setHoverRelation(a,b); nudgeHeatmapCell(a,b,e); }, { passive:false });
           heatmapGrid.appendChild(cell);
         }
       }
@@ -1771,17 +2071,279 @@ struct O{@builtin(position)pos:vec4<f32>,@location(0)uv:vec2<f32>};
     beaconGlobalGUI.add(simParams, 'beaconScale', 0, 5, 0.001).name('Beacon amp scale');
 
     const boundaryGUI = runtimeGUI.addFolder('Boundary');
-    boundaryGUI.add(boundary,'sides',3,128,1).name('Sides (128≈circle)').onChange(v => { boundary.sides = Math.round(v); drawOverlay(); });
-    boundaryGUI.add(boundary,'radius',32,Math.min(domain.w,domain.h)*0.5,1).name('Radius').onChange(drawOverlay);
-    boundaryGUI.add(boundary,'rotation',-Math.PI,Math.PI,0.001).name('Rotation').onChange(drawOverlay);
+    boundaryGUI.add(boundary,'sides',3,128,1).name('Sides (128≈circle)').onChange(v => { boundary.sides = Math.round(v); normalizeBeaconPositions(); uploadBeacons(); drawOverlay(); });
+    boundaryGUI.add(boundary,'radius',32,Math.min(domain.w,domain.h)*0.5,1).name('Radius').onChange(() => { normalizeBeaconPositions(); uploadBeacons(); drawOverlay(); });
+    boundaryGUI.add(boundary,'rotation',-Math.PI,Math.PI,0.001).name('Rotation').onChange(() => { normalizeBeaconPositions(); uploadBeacons(); drawOverlay(); });
     boundaryGUI.add(boundary,'bounce',0,1.2,0.01).name('Wall bounce');
+    boundaryGUI.add(boundary,'keepBeaconsInside').name('Keep beacons inside').onChange(() => { normalizeBeaconPositions(); uploadBeacons(); drawOverlay(); });
+
+    /********************  SECTION 1C.5 ─ ALIEN COCKPIT UI **************/
+    function updateAllGUIDisplays(){
+      try { runtimeGUI.controllersRecursive().forEach(c => c.updateDisplay()); }
+      catch { /* lil-gui changed internals; safe to ignore. */ }
+      visualCtrls.forEach(c => c.updateDisplay());
+      heatmapVisibleCtrl?.updateDisplay();
+      heatmapShowValuesCtrl?.updateDisplay();
+    }
+    function setHeatmapVisible(v){
+      heatmapState.visible = !!v;
+      syncHeatmapPanelDisplay();
+      heatmapVisibleCtrl?.updateDisplay();
+    }
+    function setLabVisible(v){
+      alienState.labVisible = !!v;
+      runtimeGUI.domElement.style.display = alienState.labVisible ? '' : 'none';
+      if (heatmapPanel) heatmapPanel.style.display = alienState.labVisible && heatmapState.visible ? 'block' : 'none';
+      updateAlienHud();
+    }
+    function requestFullscreenMaybe(){
+      const root = document.documentElement;
+      if (!document.fullscreenElement) root.requestFullscreen?.();
+      else document.exitFullscreen?.();
+    }
+    function mutateForces(amount=0.085){
+      for (let a = 0; a < kindCount; ++a) for (let b = 0; b < kindCount; ++b) {
+        const o = forceOffset(a,b);
+        fData[o] = heatClamp(fData[o] + (Math.random()*2-1)*8, 4, 180);
+        fData[o + 1] = heatClamp(fData[o + 1] + (Math.random()*2-1)*amount, -2.5, 2.5);
+      }
+      uploadForces(); refreshForceProxy(); updateHeatmapReadouts(); updateAllGUIDisplays(); updateAlienHud();
+    }
+    function stabilizeOrganism(){
+      symmetrizeForces();
+      simParams.forceScale = Math.max(-1.25, Math.min(1.25, simParams.forceScale * 0.72));
+      simParams.radiusScale = Math.max(0.35, Math.min(1.8, simParams.radiusScale));
+      simParams.friction = Math.min(simParams.friction, 0.993);
+      if (simParams.speedLimit === 0 || simParams.speedLimit > 220) simParams.speedLimit = 220;
+      refreshForceProxy(); updateHeatmapReadouts(); updateAllGUIDisplays(); updateAlienHud();
+    }
+    function matrixSymmetryScore(){
+      if (kindCount <= 1) return 1;
+      let diff = 0, total = 1e-6;
+      for (let a = 0; a < kindCount; ++a) for (let b = a + 1; b < kindCount; ++b) {
+        const ab = forceOffset(a,b), ba = forceOffset(b,a);
+        diff += Math.abs(fData[ab] - fData[ba]) / 180 + Math.abs(fData[ab + 1] - fData[ba + 1]) / 2.5;
+        total += 2;
+      }
+      return Math.max(0, Math.min(1, 1 - diff / total));
+    }
+    function chooseShipHint(){
+      const sym = matrixSymmetryScore();
+      const rel = hoverRelation.active ? hoverRelation : selectedForceValues();
+      if (fps < 32) return '<b>THERMAL PRESSURE:</b> lower particle count, disable glow, or switch to Pocket profile next launch.';
+      if (beaconCount === 0) return '<b>SEED A VOICE:</b> right-click desktop or long-press touch to add a beacon.';
+      if (Math.abs(simParams.beaconScale) < 1e-4) return '<b>BEACON FIELD MUTED:</b> raise Beacon globals → Beacon amp scale to reconnect wave pressure to the organism.';
+      if (liveWaveSources.size > 0) return '<b>BIOAUDIO LINK:</b> microphone waveform is feeding beacon pressure in real time.';
+      if (heatmapState.visible && selectedRelation.active) return `<b>RELATION PROBE:</b> K${rel.a} is the moving kind. K${rel.b} is the source kind. Wheel cells to tune strength; Shift+wheel tunes radius.`;
+      if (heatmapState.visible) return '<b>RELATION PROBE:</b> hover or tap a matrix cell to spotlight which kinds it connects.';
+      if (renderParams.trails) return '<b>VISUAL ECHO:</b> trails are only rendering memory; they do not alter the physics.';
+      if (sym > 0.86) return '<b>SYMMETRY HIGH:</b> stable crystals and orbiting tissues are more likely. Mutate to make it stranger.';
+      return '<b>COCKPIT READY:</b> use the morph membrane for broad steering; open the matrix for surgical edits.';
+    }
+
+    const alienRefs = {};
+    function makeAlienCockpit(){
+      const panel = document.createElement('div');
+      panel.className = 'alien-cockpit';
+      panel.innerHTML = `
+        <div class="alien-title">
+          <strong><span class="glyph">Ξ</span> organism cockpit</strong>
+          <button type="button" data-collapse>collapse</button>
+        </div>
+        <div class="alien-body">
+          <div class="alien-readouts">
+            <div class="alien-readout"><span>FPS</span><b data-fps>--</b></div>
+            <div class="alien-readout"><span>Particles</span><b data-particles>${particleCount.toLocaleString()}</b></div>
+            <div class="alien-readout"><span>Kinds</span><b data-kinds>${kindCount}</b></div>
+            <div class="alien-readout"><span>Beacons</span><b data-beacons>0</b></div>
+            <div class="alien-readout"><span>Boundary</span><b data-boundary>${Math.round(boundary.sides)}-gon</b></div>
+            <div class="alien-readout"><span>Audio</span><b data-audio>idle</b></div>
+          </div>
+          <div class="alien-relation">
+            <div class="kind-pill" data-rel-a>K0 moving</div>
+            <div class="arrow">← obeys</div>
+            <div class="kind-pill" data-rel-b>K0 source</div>
+          </div>
+          <div class="alien-commands">
+            <button type="button" data-act="pause">pause</button>
+            <button type="button" data-act="trails">trails</button>
+            <button type="button" data-act="matrix">matrix</button>
+            <button type="button" data-act="mutate">mutate</button>
+            <button type="button" data-act="stabilize">stabilize</button>
+            <button type="button" data-act="lab">lab</button>
+            <button type="button" data-act="fullscreen">fullscreen</button>
+            <button type="button" data-act="reset">respawn</button>
+            <button type="button" data-act="aura">fields</button>
+          </div>
+          <div class="alien-guidance" data-guidance></div>
+        </div>`;
+      document.body.appendChild(panel);
+      alienRefs.cockpit = panel;
+      alienRefs.fps = panel.querySelector('[data-fps]');
+      alienRefs.beacons = panel.querySelector('[data-beacons]');
+      alienRefs.boundary = panel.querySelector('[data-boundary]');
+      alienRefs.audio = panel.querySelector('[data-audio]');
+      alienRefs.relA = panel.querySelector('[data-rel-a]');
+      alienRefs.relB = panel.querySelector('[data-rel-b]');
+      alienRefs.guidance = panel.querySelector('[data-guidance]');
+      panel.querySelector('[data-collapse]').addEventListener('click', () => {
+        panel.classList.toggle('alien-collapsed');
+        panel.querySelector('[data-collapse]').textContent = panel.classList.contains('alien-collapsed') ? 'expand' : 'collapse';
+      });
+      panel.querySelectorAll('[data-act]').forEach(btn => btn.addEventListener('click', () => {
+        const act = btn.dataset.act;
+        if (act === 'pause') alienState.paused = !alienState.paused;
+        if (act === 'trails') { renderParams.trails = !renderParams.trails; if (renderParams.trails) clearTrailHistory(); updateAllGUIDisplays(); }
+        if (act === 'matrix') setHeatmapVisible(!heatmapState.visible);
+        if (act === 'mutate') mutateForces();
+        if (act === 'stabilize') stabilizeOrganism();
+        if (act === 'lab') setLabVisible(!alienState.labVisible);
+        if (act === 'fullscreen') requestFullscreenMaybe();
+        if (act === 'reset') particleOps.resetParticles();
+        if (act === 'aura') { alienState.beaconAuras = !alienState.beaconAuras; drawOverlay(); }
+        updateAlienHud();
+      }));
+    }
+
+    function makeMorphMembrane(){
+      const dock = document.createElement('div');
+      dock.className = 'alien-morph';
+      dock.innerHTML = `
+        <div class="alien-morph-head">
+          <strong>morph membrane</strong>
+          <button type="button" data-hide>hide</button>
+        </div>
+        <div class="alien-pad-wrap">
+          <div class="alien-pad" data-pad>
+            <span class="alien-axis left">order</span><span class="alien-axis right">chaos</span>
+            <span class="alien-axis top">energy</span><span class="alien-axis bottom">calm</span>
+            <div class="alien-knob" data-knob></div>
+          </div>
+          <div class="alien-morph-readout"><span data-morph-x>chaos 0.50</span><span data-morph-y>energy 0.50</span></div>
+          <div class="alien-morph-readout"><button type="button" data-visuals>visuals linked</button><button type="button" data-recenter>center</button></div>
+        </div>`;
+      document.body.appendChild(dock);
+      alienRefs.morph = dock;
+      const pad = dock.querySelector('[data-pad]');
+      const knob = dock.querySelector('[data-knob]');
+      const xOut = dock.querySelector('[data-morph-x]');
+      const yOut = dock.querySelector('[data-morph-y]');
+      alienRefs.morphKnob = knob;
+      alienRefs.morphX = xOut;
+      alienRefs.morphY = yOut;
+      function setMorph(x,y,apply=true){
+        alienState.morphX = Math.max(0, Math.min(1, x));
+        alienState.morphY = Math.max(0, Math.min(1, y));
+        knob.style.left = `${alienState.morphX * 100}%`;
+        knob.style.top = `${alienState.morphY * 100}%`;
+        const chaos = alienState.morphX;
+        const energy = 1 - alienState.morphY;
+        xOut.textContent = `chaos ${chaos.toFixed(2)}`;
+        yOut.textContent = `energy ${energy.toFixed(2)}`;
+        if (!apply) return;
+        const k = Math.max(0, Math.min(1, alienState.morphIntensity));
+        const blend = (cur, target) => cur * (1 - k) + target * k;
+        simParams.forceScale = blend(simParams.forceScale, 0.18 + chaos * 2.35 + energy * 0.42);
+        simParams.radiusScale = blend(simParams.radiusScale, 0.48 + (1 - chaos) * 1.55 + chaos * 0.45);
+        simParams.friction = blend(simParams.friction, 0.955 + energy * 0.048);
+        simParams.speedLimit = blend(simParams.speedLimit || 120, 85 + energy * 420);
+        boundary.bounce = blend(boundary.bounce, 0.25 + chaos * 0.78);
+        if (alienState.morphVisuals) {
+          renderParams.pointBrightness = blend(renderParams.pointBrightness, 0.58 + energy * 1.7);
+          renderParams.trailFade = blend(renderParams.trailFade, 0.865 + energy * 0.125);
+          renderParams.trailParticleGain = blend(renderParams.trailParticleGain, 0.20 + energy * 0.68);
+        }
+        updateAllGUIDisplays();
+        drawOverlay();
+        updateAlienHud();
+      }
+      alienRefs.setMorph = setMorph;
+      setMorph(alienState.morphX, alienState.morphY, false);
+      function pointerToMorph(e){
+        const r = pad.getBoundingClientRect();
+        setMorph((e.clientX - r.left) / Math.max(1, r.width), (e.clientY - r.top) / Math.max(1, r.height), true);
+      }
+      pad.addEventListener('pointerdown', e => { pad.setPointerCapture(e.pointerId); pointerToMorph(e); });
+      pad.addEventListener('pointermove', e => { if (e.buttons) pointerToMorph(e); });
+      dock.querySelector('[data-hide]').addEventListener('click', () => { alienState.morphPad = false; syncAlienPanels(); updateAlienHud(); });
+      dock.querySelector('[data-recenter]').addEventListener('click', () => setMorph(0.5,0.5,true));
+      dock.querySelector('[data-visuals]').addEventListener('click', e => {
+        alienState.morphVisuals = !alienState.morphVisuals;
+        e.currentTarget.classList.toggle('active', alienState.morphVisuals);
+      });
+      dock.querySelector('[data-visuals]').classList.toggle('active', alienState.morphVisuals);
+    }
+
+    function makeAlienToast(){
+      const toast = document.createElement('div');
+      toast.className = 'alien-toast';
+      document.body.appendChild(toast);
+      alienRefs.toast = toast;
+    }
+    function showAlienToast(msg){
+      if (!alienRefs.toast) return;
+      alienRefs.toast.innerHTML = msg;
+      alienRefs.toast.classList.add('visible');
+      clearTimeout(showAlienToast._t);
+      showAlienToast._t = setTimeout(() => alienRefs.toast.classList.remove('visible'), 1600);
+    }
+
+    updateAlienHud = function(){
+      if (!alienRefs.cockpit) return;
+      alienRefs.cockpit.classList.toggle('alien-hidden', !alienState.hud);
+      alienRefs.fps.textContent = `${Math.round(fps)}`;
+      alienRefs.beacons.textContent = `${beaconCount}/${MAX_BEACONS}`;
+      alienRefs.boundary.textContent = `${Math.round(boundary.sides)}-gon`;
+      alienRefs.audio.textContent = liveWaveSources.size ? `${liveWaveSources.size} live` : 'idle';
+      const hudRel = hoverRelation.active ? hoverRelation : selectedRelation;
+      alienRefs.relA.textContent = hudRel.active ? `K${hudRel.a} moving` : 'matrix idle';
+      alienRefs.relB.textContent = hudRel.active ? `K${hudRel.b} source` : 'select cell';
+      if (alienState.guidance) alienRefs.guidance.innerHTML = chooseShipHint();
+      alienRefs.cockpit.querySelector('[data-act="pause"]').classList.toggle('active', alienState.paused);
+      alienRefs.cockpit.querySelector('[data-act="trails"]').classList.toggle('active', renderParams.trails);
+      alienRefs.cockpit.querySelector('[data-act="matrix"]').classList.toggle('active', heatmapState.visible);
+      alienRefs.cockpit.querySelector('[data-act="lab"]').classList.toggle('active', alienState.labVisible);
+      alienRefs.cockpit.querySelector('[data-act="aura"]').classList.toggle('active', alienState.beaconAuras);
+    };
+    syncAlienPanels = function(){
+      alienRefs.cockpit?.classList.toggle('alien-hidden', !alienState.hud);
+      alienRefs.morph?.classList.toggle('alien-hidden', !alienState.morphPad);
+    };
+    makeAlienCockpit();
+    makeMorphMembrane();
+    makeAlienToast();
+    syncAlienPanels();
+    updateAlienHud();
+    showAlienToast('Ξ cockpit online · right-click or long-press to seed beacons · hover matrix cells to spotlight relationships');
+
+    const alienGUI = runtimeGUI.addFolder('Alien cockpit');
+    alienGUI.add(alienState, 'hud').name('Show cockpit').onChange(() => { syncAlienPanels(); updateAlienHud(); });
+    alienGUI.add(alienState, 'morphPad').name('Show morph membrane').onChange(syncAlienPanels);
+    alienGUI.add(alienState, 'guidance').name('Ship-computer hints').onChange(updateAlienHud);
+    alienGUI.add(alienState, 'relationshipSpotlight').name('Relationship spotlight').onChange(updateAlienHud);
+    alienGUI.add(alienState, 'beaconAuras').name('Beacon field overlay').onChange(drawOverlay);
+    alienGUI.add(alienState, 'morphVisuals').name('Morph drives visuals');
+    alienGUI.add(alienState, 'morphIntensity', 0.05, 1, 0.01).name('Morph intensity');
+
+    window.addEventListener('keydown', e => {
+      if (e.target && ['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
+      const k = e.key.toLowerCase();
+      if (k === ' ') { e.preventDefault(); alienState.paused = !alienState.paused; updateAlienHud(); }
+      else if (k === 'h') setLabVisible(!alienState.labVisible);
+      else if (k === 'm') setHeatmapVisible(!heatmapState.visible);
+      else if (k === 't') { renderParams.trails = !renderParams.trails; if (renderParams.trails) clearTrailHistory(); updateAllGUIDisplays(); updateAlienHud(); }
+      else if (k === 'f') requestFullscreenMaybe();
+      else if (k === 'r') particleOps.resetParticles();
+      else if (k === '?') { alienState.guidance = !alienState.guidance; updateAlienHud(); }
+    });
+
     /********************  SECTION 1D ─ FILE I/O *************************
      * Remove this block if you don’t need browser save/export.
      ********************************************************************/
     const fileOps={
       save(){
         const blob={
-          particleCount,kindCount,preset,simParams,renderParams,boundary,
+          particleCount,kindCount,preset,simParams,renderParams,boundary,alienUI:alienState,
           forces:Array.from(fData),beaconCount,
           beacons:Array.from(beaconArr.slice(0,beaconCount*B_STRIDE)),
           waves   : Array.from(waveArr)
@@ -1807,7 +2369,8 @@ struct O{@builtin(position)pos:vec4<f32>,@location(0)uv:vec2<f32>};
             speedLimit  : 'Velocity clamp; 0 disables clamping.'
           },
           renderParams  : 'Visual mode controls: trails, trailFade, brightness/gain, and toggleable CSS glow.',
-          boundary      : 'Regular n-sided polygon: { sides, radius, rotation, bounce }. Use sides=128 for a circle-like boundary.',
+          boundary      : 'Regular n-sided polygon: { sides, radius, rotation, bounce, keepBeaconsInside }. Use sides=128 for a circle-like boundary.',
+          alienUI      : 'Cockpit/hints/morph membrane visibility and behavior flags.',
           forces        : '[radius, strength] pairs for every kind × kind interaction.',
           beaconCount   : 'Number of active beacons in `beacons[]`.',
           beacons       : 'Flattened array of beacons: [x, y, freq, amp, decay, phase, grid, useWave] …',
@@ -1885,25 +2448,33 @@ struct O{@builtin(position)pos:vec4<f32>,@location(0)uv:vec2<f32>};
     let trailReadIndex=0;
     clearTrailHistory();
     function frame(){
-      pumpLiveAudioWaves();
-      simTime+=simParams.dt; updUniform(beaconCount);
+      if (!alienState.paused) {
+        pumpLiveAudioWaves();
+        simTime+=simParams.dt; updUniform(beaconCount);
+      }
+      const relA = hoverRelation.active ? hoverRelation.a : selectedRelation.a;
+      const relB = hoverRelation.active ? hoverRelation.b : selectedRelation.b;
+      const relActive = (alienState.relationshipSpotlight && hoverRelation.active) ? 1 : 0;
       queue.writeBuffer(renderUBuf,0,new Float32Array([
-        renderParams.trails ? renderParams.trailParticleGain : renderParams.pointBrightness,0,0,0
+        renderParams.trails ? renderParams.trailParticleGain : renderParams.pointBrightness,
+        relA, relB, relActive
       ]));
       queue.writeBuffer(fadeUBuf,0,new Float32Array([renderParams.trailFade,0,0,0]));
       queue.writeBuffer(presentUBuf,0,new Float32Array([renderParams.trailOutputGain,0,0,0]));
       const enc=device.createCommandEncoder();
 
-      const cp=enc.beginComputePass();
-      cp.setPipeline(compPipe);
-      cp.setBindGroup(0,flip?compBG_B:compBG_A);
-      cp.setBindGroup(1,simBG);
-      cp.setBindGroup(2,beaconBG);
-      cp.setBindGroup(3,waveBG);
-      cp.dispatchWorkgroups(Math.ceil(particleCount/256));
-      cp.end();
+      if (!alienState.paused) {
+        const cp=enc.beginComputePass();
+        cp.setPipeline(compPipe);
+        cp.setBindGroup(0,flip?compBG_B:compBG_A);
+        cp.setBindGroup(1,simBG);
+        cp.setBindGroup(2,beaconBG);
+        cp.setBindGroup(3,waveBG);
+        cp.dispatchWorkgroups(Math.ceil(particleCount/256));
+        cp.end();
+      }
 
-      const particleBG = flip ? rBG_A : rBG_B;
+      const particleBG = alienState.paused ? (flip ? rBG_B : rBG_A) : (flip ? rBG_A : rBG_B);
       if (renderParams.trails) {
         const src = trailReadIndex;
         const dst = 1 - src;
@@ -1941,7 +2512,9 @@ struct O{@builtin(position)pos:vec4<f32>,@location(0)uv:vec2<f32>};
 
       queue.submit([enc.finish()]);
       drawOverlay();
-      flip=!flip; requestAnimationFrame(frame);
+      updateAlienHud();
+      if (!alienState.paused) flip=!flip;
+      requestAnimationFrame(frame);
     }
     requestAnimationFrame(frame);
     /* ****************************************************************** */
