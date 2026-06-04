@@ -1,0 +1,1951 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WebGPU Particle-Life + Sound-Wave Beacons</title>
+  <style>
+    body   { margin:0; background:#000; overflow:hidden; position:relative;
+             color:#ddd; font-family:system-ui; }
+    canvas { display:block; }
+    #overlay   { position:absolute; top:0; left:0; pointer-events:none; }
+    #setupMask { position:fixed; inset:0; background:#000d;
+                 display:flex; align-items:center; justify-content:center; }
+    :root {
+      --dos-bg:#020502; --dos-bg2:#061406; --dos-green:#7cff9b;
+      --dos-green-dim:#2fc45a; --dos-cyan:#6dfcff; --dos-amber:#ffd866;
+      --dos-red:#ff4d7d; --dos-grid:rgba(124,255,155,.22);
+    }
+    body   { font-family:"IBM VGA 8x16", "Fira Code", "Cascadia Mono", "Courier New", monospace; }
+    .lil-gui.root, .lil-gui {
+      --background-color:rgba(0,9,2,.91); --text-color:var(--dos-green);
+      --title-background-color:#001b07; --title-text-color:var(--dos-cyan);
+      --widget-color:#021f0b; --hover-color:#073516; --focus-color:#0b4f23;
+      --number-color:var(--dos-amber); --string-color:var(--dos-cyan);
+      --font-family:"IBM VGA 8x16", "Fira Code", "Cascadia Mono", "Courier New", monospace;
+      text-shadow:0 0 8px rgba(124,255,155,.35);
+    }
+    .force-panel {
+      position:fixed; left:16px; bottom:16px; z-index:900;
+      width:min(690px, calc(100vw - 32px)); max-height:78vh; overflow:auto;
+      background:
+        radial-gradient(circle at 16% 10%, rgba(109,252,255,.12), transparent 32%),
+        linear-gradient(180deg, rgba(0,18,5,.97), rgba(0,6,2,.96));
+      border:1px solid var(--dos-green); border-radius:0;
+      box-shadow:0 0 0 1px rgba(0,0,0,.9) inset, 0 0 28px rgba(47,196,90,.30), 0 18px 60px rgba(0,0,0,.65);
+      padding:12px; user-select:none; color:var(--dos-green);
+      font:12px/1.35 "IBM VGA 8x16", "Fira Code", "Cascadia Mono", "Courier New", monospace;
+      text-shadow:0 0 8px rgba(124,255,155,.38);
+    }
+    .force-panel::before {
+      content:""; position:sticky; display:block; top:-12px; height:0; z-index:3; pointer-events:none;
+      box-shadow:0 0 0 9999px transparent;
+    }
+    .force-panel::after {
+      content:""; position:absolute; inset:0; pointer-events:none;
+      background:repeating-linear-gradient(180deg, rgba(255,255,255,.035) 0, rgba(255,255,255,.035) 1px, transparent 1px, transparent 4px);
+      mix-blend-mode:screen; opacity:.23;
+    }
+    .force-titlebar {
+      display:flex; justify-content:space-between; align-items:center; gap:12px; cursor:move;
+      margin:-4px -4px 10px; padding:6px 8px; border:1px solid var(--dos-grid);
+      background:linear-gradient(90deg, rgba(0,255,102,.14), rgba(0,255,255,.07));
+      color:var(--dos-cyan); letter-spacing:.08em; text-transform:uppercase;
+    }
+    .force-titlebar strong { font-size:13px; font-weight:800; }
+    .force-titlebar button, .force-panel button {
+      background:#031407; color:var(--dos-green); border:1px solid var(--dos-green-dim);
+      border-radius:0; padding:5px 8px; cursor:pointer; font:inherit; text-transform:uppercase;
+      box-shadow:0 0 0 1px rgba(0,0,0,.85) inset;
+    }
+    .force-titlebar button:hover, .force-panel button:hover { background:#073516; color:#d7ffe0; border-color:var(--dos-cyan); }
+    .force-panel button.active {
+      background:var(--dos-green); color:#001904; text-shadow:none; border-color:#d8ffe1;
+      box-shadow:0 0 16px rgba(124,255,155,.55);
+    }
+    .force-panel button.danger.active { background:var(--dos-red); color:#190007; border-color:#ffc4d2; box-shadow:0 0 16px rgba(255,77,125,.55); }
+    .force-panel button.warn.active { background:var(--dos-amber); color:#181000; border-color:#fff2b8; box-shadow:0 0 16px rgba(255,216,102,.55); }
+    .force-help {
+      border:1px dashed var(--dos-grid); background:rgba(0,255,102,.055); padding:7px 8px; margin:0 0 10px;
+      color:#baffc8;
+    }
+    .force-status {
+      display:grid; gap:3px; border:1px solid rgba(109,252,255,.45); background:rgba(0,20,16,.62);
+      padding:7px 8px; margin-bottom:10px; color:var(--dos-cyan); white-space:normal;
+    }
+    .force-status b { color:var(--dos-amber); font-weight:800; }
+    .force-toolbar { display:grid; grid-template-columns:1.15fr 1fr; gap:8px 10px; margin-bottom:10px; }
+    .force-toolbar label { display:grid; gap:4px; color:#baffc8; }
+    .force-toolbar label.full { grid-column:1 / -1; }
+    .force-mode-row { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:6px; }
+    .force-range-row { display:grid; grid-template-columns:1fr 82px; gap:6px; align-items:center; }
+    .force-toolbar select, .force-toolbar input[type=number] {
+      width:100%; box-sizing:border-box; background:#000; color:var(--dos-amber);
+      border:1px solid var(--dos-green-dim); border-radius:0; padding:5px 6px; font:inherit;
+      box-shadow:0 0 0 1px rgba(0,0,0,.85) inset;
+    }
+    .force-toolbar input[type=range] { width:100%; accent-color:var(--dos-green); }
+    .force-toolbar output { color:var(--dos-amber); justify-self:end; }
+    .force-checks { display:flex; flex-wrap:wrap; gap:12px; margin:4px 0 10px; color:#baffc8; }
+    .force-checks input { accent-color:var(--dos-green); }
+    .force-grid-wrap { overflow:auto; padding-bottom:4px; border:1px solid var(--dos-grid); background:rgba(0,0,0,.42); }
+    .force-grid { display:grid; gap:3px; align-items:stretch; min-width:max-content; padding:7px; }
+    .force-label {
+      display:flex; align-items:center; justify-content:center; min-width:48px; min-height:34px;
+      color:var(--dos-cyan); font-size:11px; border:1px solid rgba(109,252,255,.28); background:rgba(0,255,255,.045);
+      text-transform:uppercase;
+    }
+    .force-corner { background:rgba(255,216,102,.06); color:var(--dos-amber); }
+    .force-cell {
+      width:72px; height:48px; border-radius:0; border:1px solid rgba(124,255,155,.34);
+      display:grid; grid-template-rows:1fr auto; align-items:center; justify-items:center; position:relative; overflow:hidden;
+      cursor:crosshair; color:#f0fff2; font-weight:800; font-size:12px;
+      text-shadow:0 0 8px rgba(0,0,0,.85), 0 0 8px currentColor;
+      transition:transform .05s linear, border-color .05s linear, filter .05s linear;
+    }
+    .force-cell:hover { transform:translateY(-1px); filter:brightness(1.22); border-color:var(--dos-amber); }
+    .force-cell.selected { outline:2px solid var(--dos-amber); outline-offset:1px; box-shadow:0 0 18px rgba(255,216,102,.35); }
+    .force-cell.positive { color:#d7fff0; }
+    .force-cell.negative { color:#ffe2eb; }
+    .force-cell.zero { color:#baffc8; }
+    .force-cell::after {
+      content:""; position:absolute; inset:auto 5px 4px 5px; height:4px; border:1px solid rgba(255,255,255,.2);
+      background:linear-gradient(90deg, var(--dos-amber), var(--dos-cyan)); transform-origin:left center; transform:scaleX(var(--radius-frac,.35));
+      box-shadow:0 0 8px rgba(255,216,102,.45);
+    }
+    .force-cell-strength { align-self:end; padding-top:5px; }
+    .force-cell-radius { align-self:start; margin-top:-1px; margin-bottom:7px; font-size:10px; color:var(--dos-amber); opacity:.96; }
+    .force-cell-mini { font-size:10px; color:#c5ffd0; margin-bottom:8px; }
+    .force-legend {
+      display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-top:8px; color:#baffc8; font-size:11px;
+    }
+    .force-legend .chip { display:inline-flex; align-items:center; gap:5px; }
+    .force-legend .swatch { width:24px; height:9px; border:1px solid rgba(255,255,255,.25); display:inline-block; }
+  </style>
+</head>
+<body>
+  <!-- hidden until simulation starts -->
+  <canvas id="sim"     width="1024" height="512" style="display:none"></canvas>
+  <canvas id="overlay" width="1024" height="512" style="display:none"></canvas>
+
+  <!-- setup screen -->
+  <div id="setupMask"></div>
+
+  <script type="module">
+  import GUI from 'https://cdn.jsdelivr.net/npm/lil-gui@0.19.1/dist/lil-gui.esm.min.js';
+
+  /**********************************************************************
+   * SECTION 0 ─ PRE-SIMULATION SETUP (+ SAVE / IMPORT / PASTE)
+   *********************************************************************/
+  const mask   = document.getElementById('setupMask');
+  const stored = localStorage.getItem('particleSimSave');
+
+  /* ---------- helpers -------------------------- */
+  const tryStart = txt => {
+    try {
+      const cfg = JSON.parse(txt);
+      Object.keys(cfg).forEach(k => k.startsWith('_') && delete cfg[k]);
+      startSim(cfg);
+    } catch (e) {
+      alert('❌  Could not parse JSON:\n' + e.message);
+      console.error(e);
+    }
+  };
+  async function importFile () {
+    const el = Object.assign(document.createElement('input'),
+                              { type:'file', accept:'application/json' });
+    el.click();
+    el.onchange = () => el.files?.[0]?.text().then(tryStart);
+  }
+  function pasteJSON () {
+    const txt = prompt('Paste your save JSON here:');
+    if (txt) tryStart(txt);
+  }
+
+  /* ---------- setup state & GUI --------------- */
+  const MAX_BEACONS=16
+  const GRID_FLAG = 6;
+  const WAVE_FLAG = 7;
+  const WAVE_LEN  = 256;
+  const setup = {
+    particleCount : 65_536,
+    kindCount     : 2,
+    preset        : 'Random',             // Random | Sand
+    boundarySides : 64,                   // 128 is visually close to a circle
+    loadSaved  : () => stored && startSim(JSON.parse(stored)),
+    importFile, pasteJSON,
+    launch     : () => startSim({
+                   particleCount : setup.particleCount,
+                   kindCount     : setup.kindCount,
+                   preset        : setup.preset,
+                   boundary      : {
+                     sides    : setup.boundarySides,
+                     rotation : -Math.PI / 2,
+                     bounce   : 1.0
+                   }
+                 })
+  };
+  const preGUI = new GUI({ width:300, container:mask }).title('Simulation Setup');
+  preGUI.add(setup,'particleCount',1024,1<<16,1024).name('# Particles');
+  preGUI.add(setup,'kindCount',1,6,1).name('# Kinds');
+  preGUI.add(setup,'preset',['Random','Sand']).name('Preset');
+  preGUI.add(setup,'boundarySides',3,128,1).name('Boundary sides');
+  if (stored) preGUI.add(setup,'loadSaved').name('📂 Load Previous');
+  preGUI.add(setup,'importFile').name('📁 Import File');
+  preGUI.add(setup,'pasteJSON').name('📝 Paste JSON');
+  preGUI.add(setup,'launch').name('🚀 Launch');
+
+  /**********************************************************************
+   * SECTION 1 ─ MAIN ENTRY POINT (startSim)
+   *********************************************************************/
+  async function startSim (cfg){
+    /* un-mask canvases & destroy setup */
+    preGUI.destroy(); mask.remove();
+    const canvas  = document.getElementById('sim');
+    const oCanvas = document.getElementById('overlay');
+    canvas.style.display = oCanvas.style.display = 'block';
+    const octx    = oCanvas.getContext('2d');
+
+    /* basic config normalisation */
+    const particleCount = cfg.particleCount ?? 65_536;
+    const kindCount     = cfg.kindCount     ?? 2;
+    const preset        = cfg.preset        ?? 'Random';
+    const domain        = { w:1024, h:512 };
+    const simParams     = {
+      dt:0.01, friction:0.995, C:100,
+      forceScale:1.0, radiusScale:1.0, beaconScale:1.0, speedLimit:0.0,
+      ...(cfg.simParams ?? {})
+    };
+    const renderParams  = {
+      trails:false, trailFade:0.945, trailParticleGain:0.42,
+      pointBrightness:1.0, trailOutputGain:1.15,
+      glow:false, glowBlur:0.35, glowBrightness:1.18, glowSaturation:1.25,
+      ...(cfg.renderParams ?? {})
+    };
+    const boundary      = {
+      sides    : Math.max(3, Math.min(128, Math.round(cfg.boundary?.sides ?? cfg.boundarySides ?? 64))),
+      radius   : cfg.boundary?.radius   ?? Math.min(domain.w, domain.h) * 0.48,
+      rotation : cfg.boundary?.rotation ?? -Math.PI / 2,
+      bounce   : cfg.boundary?.bounce   ?? 1.0
+    };
+    function pointInsideBoundary(x, y) {
+      const n  = Math.max(3, Math.min(128, Math.round(boundary.sides)));
+      const cx = domain.w * 0.5, cy = domain.h * 0.5, R = boundary.radius;
+      for (let k = 0; k < n; ++k) {
+        const a0 = boundary.rotation + Math.PI * 2 * k / n;
+        const a1 = boundary.rotation + Math.PI * 2 * (k + 1) / n;
+        const ax = cx + R * Math.cos(a0), ay = cy + R * Math.sin(a0);
+        const bx = cx + R * Math.cos(a1), by = cy + R * Math.sin(a1);
+        const ex = bx - ax, ey = by - ay;
+        const len = Math.hypot(ex, ey) || 1;
+        const nx = ey / len, ny = -ex / len;
+        if ((x - ax) * nx + (y - ay) * ny > 0) return false;
+      }
+      return true;
+    }
+    function randomPointInBoundary() {
+      const cx = domain.w * 0.5, cy = domain.h * 0.5, R = boundary.radius;
+      for (let tries = 0; tries < 1024; ++tries) {
+        const x = cx + (Math.random() * 2 - 1) * R;
+        const y = cy + (Math.random() * 2 - 1) * R;
+        if (pointInsideBoundary(x, y)) return [x, y];
+      }
+      return [cx, cy];
+    }
+    /*
+    real-seconds per frame   =  1 / FPS
+    simulation-seconds/frame =  dt
+    --------------------------------------
+    scale factor             =  dt × FPS
+    */
+    /*************************  SECTION 1A ─ GPU CORE ************************/
+    if (!navigator.gpu) { alert('WebGPU not enabled'); throw new Error('no GPU'); }
+    const adapter = await navigator.gpu.requestAdapter();
+    const device  = await adapter.requestDevice();
+    const queue   = device.queue;
+
+    /* particle buffers --------------------------------------------------*/
+    const P_STRIDE=5, pBytes=particleCount*P_STRIDE*4;
+    const pInit=new Float32Array(pBytes/4);
+    if (cfg.particles) pInit.set(cfg.particles);
+    else for(let i=0,o=0;i<particleCount;++i,o+=P_STRIDE){
+      const [x, y] = randomPointInBoundary();
+      pInit[o]=x; pInit[o+1]=y;
+      pInit[o+2]=(Math.random()-0.5)*2; pInit[o+3]=(Math.random()-0.5)*2;
+      pInit[o+4]=Math.floor(Math.random()*kindCount);
+    }
+    const bufA=device.createBuffer({size:pBytes,
+      usage:GPUBufferUsage.STORAGE|GPUBufferUsage.VERTEX|GPUBufferUsage.COPY_DST});
+    const bufB=device.createBuffer({size:pBytes,
+      usage:GPUBufferUsage.STORAGE|GPUBufferUsage.VERTEX|GPUBufferUsage.COPY_DST});
+    queue.writeBuffer(bufA,0,pInit);
+
+    /* attraction / repulsion table -------------------------------------*/
+    function buildTable(kc,p) {
+      const arr=new Float32Array(kc*kc*2);
+      for(let a=0;a<kc;++a)for(let b=0;b<kc;++b){
+        const i=(a*kc+b)*2;
+        arr[i]  =20+Math.random()*40;
+        arr[i+1]=(p==='Sand'?0:(Math.random()*2-1)*0.5);
+      } return arr;
+    }
+    const expectedForceFloats = kindCount * kindCount * 2;
+    let fData = cfg.forces
+      ? new Float32Array(cfg.forces) : buildTable(kindCount,preset);
+    if (fData.length !== expectedForceFloats) {
+      const imported = fData;
+      fData = buildTable(kindCount,preset);
+      fData.set(imported.subarray(0, Math.min(imported.length, fData.length)));
+    }
+    const fBuf  = device.createBuffer({size:fData.byteLength,
+      usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
+    queue.writeBuffer(fBuf,0,fData);
+
+
+    const FORCE_PRESET_NAMES = [
+      'Random', 'Sand', 'Gentle clusters', 'All attract',
+      'All repel', 'Predator rings', 'Symmetric random'
+    ];
+    function forceOffset(a,b){ return (a * kindCount + b) * 2; }
+    let forceHeatmapRaf = 0;
+    let drawForceHeatmap = () => {};
+    function scheduleForceHeatmapDraw(){
+      if (forceHeatmapRaf) return;
+      forceHeatmapRaf = requestAnimationFrame(() => {
+        forceHeatmapRaf = 0;
+        drawForceHeatmap();
+      });
+    }
+    function uploadForces(){ queue.writeBuffer(fBuf,0,fData); scheduleForceHeatmapDraw(); }
+    function setForce(a,b,radius,strength,mirror=false){
+      const o = forceOffset(a,b);
+      fData[o] = Math.max(0, radius);
+      fData[o + 1] = strength;
+      if (mirror && a !== b) {
+        const m = forceOffset(b,a);
+        fData[m] = fData[o];
+        fData[m + 1] = fData[o + 1];
+      }
+      uploadForces();
+    }
+    function applyForcePreset(name='Random'){
+      const randRadius = () => 20 + Math.random() * 40;
+      const randStrength = () => (Math.random() * 2 - 1) * 0.5;
+      if (name === 'Symmetric random') {
+        for (let a = 0; a < kindCount; ++a) {
+          for (let b = a; b < kindCount; ++b) {
+            const radius = randRadius();
+            const strength = randStrength();
+            let o = forceOffset(a,b);
+            fData[o] = radius; fData[o + 1] = strength;
+            o = forceOffset(b,a);
+            fData[o] = radius; fData[o + 1] = strength;
+          }
+        }
+        uploadForces();
+        return;
+      }
+      for (let a = 0; a < kindCount; ++a) for (let b = 0; b < kindCount; ++b) {
+        const o = forceOffset(a,b);
+        let radius = randRadius();
+        let strength = 0;
+        switch (name) {
+          case 'Sand':
+            radius = 35; strength = 0;
+            break;
+          case 'Gentle clusters':
+            radius = 46; strength = (a === b) ? 0.32 : -0.10;
+            break;
+          case 'All attract':
+            radius = 52; strength = 0.28;
+            break;
+          case 'All repel':
+            radius = 52; strength = -0.28;
+            break;
+          case 'Predator rings':
+            radius = 58;
+            if (a === b) strength = 0.12;
+            else if (b === ((a + 1) % kindCount)) strength = 0.55;
+            else if (b === ((a + kindCount - 1) % kindCount)) strength = -0.42;
+            else strength = -0.05;
+            break;
+          case 'Random':
+          default:
+            strength = randStrength();
+            break;
+        }
+        fData[o] = radius;
+        fData[o + 1] = strength;
+      }
+      uploadForces();
+    }
+    function symmetrizeForces(){
+      for (let a = 0; a < kindCount; ++a) for (let b = a + 1; b < kindCount; ++b) {
+        const ab = forceOffset(a,b), ba = forceOffset(b,a);
+        const radius = (fData[ab] + fData[ba]) * 0.5;
+        const strength = (fData[ab + 1] + fData[ba + 1]) * 0.5;
+        fData[ab] = fData[ba] = radius;
+        fData[ab + 1] = fData[ba + 1] = strength;
+      }
+      uploadForces();
+    }
+    function invertForces(){
+      for (let i = 1; i < fData.length; i += 2) fData[i] = -fData[i];
+      uploadForces();
+    }
+    function zeroForceStrengths(){
+      for (let i = 1; i < fData.length; i += 2) fData[i] = 0;
+      uploadForces();
+    }
+
+    /* simulation uniforms ----------------------------------------------*/
+    const uBuf = device.createBuffer({size:64,
+      usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+    let simTime=0; const updUniform=bc=>{
+      boundary.sides = Math.max(3, Math.min(128, Math.round(boundary.sides)));
+      queue.writeBuffer(uBuf,0,new Float32Array([
+        simParams.dt, simParams.friction, domain.w, domain.h,
+        simTime, bc, simParams.C, boundary.sides,
+        boundary.radius, boundary.rotation, boundary.bounce, simParams.forceScale,
+        simParams.radiusScale, simParams.beaconScale, simParams.speedLimit, 0
+      ]));
+    };
+
+    /* ---------- real-time FPS estimate ---------------------------------- */
+    let fps = 60;                       // start with a sane default
+    {
+      let sampleCount = 0, smoothed = 60, lastT = performance.now();
+      const upd = () => {
+        const now = performance.now();
+        const inst = 1000 / (now - lastT);
+        lastT = now;
+        smoothed = smoothed * 0.9 + inst * 0.1;   // simple IIR filter
+        if (++sampleCount === 10) {               // update every 10 frames
+          fps = smoothed;
+          sampleCount = 0;
+        }
+        requestAnimationFrame(upd);
+      };
+      requestAnimationFrame(upd);
+    }
+
+    /* WGSL shaders (generated) -----------------------------------------*/
+    const compCode = `struct P{ x:f32,y:f32,vx:f32,vy:f32,kind:f32 };
+struct F{radius:f32,strength:f32};
+struct S{ dt:f32, friction:f32, w:f32, h:f32, t:f32, bc:f32, C:f32, boundaryN:f32, boundaryR:f32, boundaryRot:f32, bounce:f32, forceScale:f32, radiusScale:f32, beaconScale:f32, speedLimit:f32, _0:f32 };
+struct B{ x:f32,y:f32,f:f32,a:f32,d:f32,ph:f32,grid:f32,useWave:f32};
+@group(0)@binding(0)var<storage,read>src:array<P>;
+@group(0)@binding(1)var<storage,read_write>dst:array<P>;
+@group(0)@binding(2)var<storage,read>tbl:array<F>;
+@group(1)@binding(0)var<uniform>sim:S;
+@group(2)@binding(0)var<storage,read>be:array<B,${MAX_BEACONS}>;
+@group(3)@binding(0)var<storage,read>wv:array<f32,${MAX_BEACONS*WAVE_LEN}>;
+const TAU=6.2831853;
+const WAVE_LEN=${WAVE_LEN}u;
+const MAX_POLY_SIDES=128u;
+
+fn waveLookup(base:u32, ang:f32)->f32{
+  let t=ang/TAU - floor(ang/TAU);
+  let p=t*f32(WAVE_LEN);
+  let i=u32(p);
+  let f=p-f32(i);
+  let off=base*WAVE_LEN;
+  let a0=wv[off + (i%WAVE_LEN)];
+  let a1=wv[off + ((i+1u)%WAVE_LEN)];
+  return a0*(1.0-f)+a1*f;
+}
+@compute @workgroup_size(256)fn main(@builtin(global_invocation_id)gid:vec3<u32>){
+  let i=gid.x; if(i>=arrayLength(&src)){return;}
+  var p=src[i]; var a=vec2<f32>(0.0);
+  let kinds=${kindCount}u;
+  for(var j:u32=0u;j<arrayLength(&src);j++){
+    if(i==j){continue;}
+    let q=src[j]; let d=vec2<f32>(q.x-p.x,q.y-p.y); let r=length(d);
+    if(r<1e-3){continue;}
+    let fp=tbl[u32(p.kind)*kinds+u32(q.kind)];
+    let effRadius=max(0.0, fp.radius*sim.radiusScale);
+    if(r<effRadius && effRadius>1e-3){ a+=normalize(d)*(fp.strength*sim.forceScale)*(1.0-r/effRadius);} }
+  let bc=u32(sim.bc);
+  let C=sim.C;
+  for(var k:u32=0u;k<bc;k++){
+    let b=be[k]; let d=vec2<f32>(p.x-b.x,p.y-b.y); let r=length(d);
+    if(r<1e-3){continue;}
+    let ang=TAU*b.f*(sim.t-r/C)+b.ph;
+    var w=sin(ang);
+    if(b.useWave>0.5){ w=waveLookup(k, ang); }
+    let press=b.a*w*sim.beaconScale/pow(r+1.0,b.d);
+    a+=normalize(d)*press; }
+  var vel=vec2<f32>((p.vx+a.x*sim.dt)*sim.friction, (p.vy+a.y*sim.dt)*sim.friction);
+  let speed=length(vel);
+  if(sim.speedLimit>0.0 && speed>sim.speedLimit){ vel = vel / speed * sim.speedLimit; }
+  var pos=vec2<f32>(p.x,p.y) + vel*sim.dt;
+  let sides=max(3u, min(MAX_POLY_SIDES, u32(sim.boundaryN + 0.5)));
+  let center=vec2<f32>(sim.w*0.5, sim.h*0.5);
+  let radius=max(8.0, sim.boundaryR);
+  for(var side:u32=0u; side<MAX_POLY_SIDES; side++){
+    if(side>=sides){break;}
+    let aAng=sim.boundaryRot + TAU*f32(side)/f32(sides);
+    let bAng=sim.boundaryRot + TAU*f32(side+1u)/f32(sides);
+    let aPt=center + radius*vec2<f32>(cos(aAng), sin(aAng));
+    let bPt=center + radius*vec2<f32>(cos(bAng), sin(bAng));
+    let edge=bPt-aPt;
+    let outN=normalize(vec2<f32>(edge.y, -edge.x));
+    let d=dot(pos-aPt, outN);
+    if(d>0.0){
+      pos = pos - outN*(d + 0.25);
+      let vn=dot(vel,outN);
+      if(vn>0.0){ vel = vel - (1.0 + sim.bounce)*vn*outN; }
+    }
+  }
+  p.x=pos.x; p.y=pos.y; p.vx=vel.x; p.vy=vel.y;
+  dst[i]=p; }`;
+
+    const vertShader = `struct P{ x:f32,y:f32,vx:f32,vy:f32,kind:f32 };
+struct R{ particleGain:f32, _0:f32, _1:f32, _2:f32 };
+@group(0)@binding(0)var<storage,read>ps:array<P>;
+@group(1)@binding(0)var<uniform>ren:R;
+struct O{@builtin(position)pos:vec4<f32>,@location(0)kind:f32};
+@vertex fn vs(@builtin(vertex_index)id:u32)->O{
+  let p=ps[id]; var o:O;
+  o.pos=vec4<f32>((p.x/${domain.w}.0)*2.0-1.0, 1.0-(p.y/${domain.h}.0)*2.0,0,1);
+  o.kind=p.kind; return o;}
+fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-abs(h*6.0-2.0),0,1); let b=clamp(2.0-abs(h*6.0-4.0),0,1); return vec3<f32>(r,g,b);}
+@fragment fn fs(i:O)->@location(0)vec4<f32>{ let c=hue(i.kind/${kindCount}.0)*ren.particleGain; return vec4<f32>(c,1);} `;
+
+    const screenShader = `struct Params{ gain:f32, _0:f32, _1:f32, _2:f32 };
+@group(0)@binding(0)var srcTex:texture_2d<f32>;
+@group(0)@binding(1)var srcSampler:sampler;
+@group(0)@binding(2)var<uniform>params:Params;
+struct O{@builtin(position)pos:vec4<f32>,@location(0)uv:vec2<f32>};
+@vertex fn vs(@builtin(vertex_index)id:u32)->O{
+  var p=array<vec2<f32>,3>(vec2<f32>(-1.0,-1.0), vec2<f32>(3.0,-1.0), vec2<f32>(-1.0,3.0));
+  var o:O; let xy=p[id];
+  o.pos=vec4<f32>(xy,0.0,1.0);
+  o.uv=vec2<f32>(xy.x*0.5+0.5, 0.5-xy.y*0.5);
+  return o;
+}
+@fragment fn fs(i:O)->@location(0)vec4<f32>{
+  let c=textureSample(srcTex,srcSampler,i.uv).rgb*params.gain;
+  return vec4<f32>(c,1.0);
+}`;
+    /* pipelines ---------------------------------------------------------*/
+    const cBGLayout = device.createBindGroupLayout({entries:[
+      {binding:0,visibility:4,buffer:{type:'read-only-storage'}},
+      {binding:1,visibility:4,buffer:{type:'storage'}},
+      {binding:2,visibility:4,buffer:{type:'read-only-storage'}}]});
+    const uBGLayout = device.createBindGroupLayout({entries:[
+      {binding:0,visibility:4,buffer:{type:'uniform'}}]});
+    const bBGLayout = device.createBindGroupLayout({entries:[
+      {binding:0,visibility:4,buffer:{type:'read-only-storage'}}]});
+    const waveBGLayout = device.createBindGroupLayout({entries:[
+      {binding:0,visibility:4,buffer:{type:'read-only-storage'}}]});
+
+    const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
+    const compPipe=device.createComputePipeline({
+      layout:device.createPipelineLayout({bindGroupLayouts:[cBGLayout,uBGLayout,bBGLayout,waveBGLayout]}),
+      compute:{module:device.createShaderModule({code:compCode}),entryPoint:'main'}
+    });
+    const rBGLayout=device.createBindGroupLayout({entries:[
+      {binding:0,visibility:1,buffer:{type:'read-only-storage'}}]});
+    const renderUBGLayout=device.createBindGroupLayout({entries:[
+      {binding:0,visibility:2,buffer:{type:'uniform'}}]});
+    const renderModule = device.createShaderModule({code:vertShader});
+    const renderLayout = device.createPipelineLayout({bindGroupLayouts:[rBGLayout,renderUBGLayout]});
+    const rPipe=device.createRenderPipeline({
+      layout:renderLayout,
+      vertex:{module:renderModule,entryPoint:'vs'},
+      fragment:{module:renderModule, entryPoint:'fs', targets:[{format:presentationFormat}]},
+      primitive:{topology:'point-list'}
+    });
+    const rPipeAdd=device.createRenderPipeline({
+      layout:renderLayout,
+      vertex:{module:renderModule,entryPoint:'vs'},
+      fragment:{module:renderModule, entryPoint:'fs', targets:[{
+        format:presentationFormat,
+        blend:{
+          color:{operation:'add',srcFactor:'one',dstFactor:'one'},
+          alpha:{operation:'add',srcFactor:'one',dstFactor:'one'}
+        }
+      }]},
+      primitive:{topology:'point-list'}
+    });
+    const screenModule = device.createShaderModule({code:screenShader});
+    const screenBGLayout = device.createBindGroupLayout({entries:[
+      {binding:0,visibility:2,texture:{}},
+      {binding:1,visibility:2,sampler:{}},
+      {binding:2,visibility:2,buffer:{type:'uniform'}}
+    ]});
+    const screenPipe = device.createRenderPipeline({
+      layout:device.createPipelineLayout({bindGroupLayouts:[screenBGLayout]}),
+      vertex:{module:screenModule,entryPoint:'vs'},
+      fragment:{module:screenModule,entryPoint:'fs',targets:[{format:presentationFormat}]},
+      primitive:{topology:'triangle-list'}
+    });
+
+    /********************  SECTION 1B ─ BEACON MODULE *********************
+     * Delete this whole block to strip every beacon-related feature.
+     ********************************************************************/
+    /*
+    1. freq:
+      real Hz = freq × simParams.dt × FPS 
+
+      If you keep dt small (e.g., 0.02) the sim runs almost in real (FPS) time; if you
+      push dt to 0.2 the same freq looks 10× faster to a human viewer.
+
+    2. decay:
+      press ∝ 1 / (r + 1)^d
+
+      decay = 0 No attenuation → the beacon shakes the whole map equally.
+
+      decay = 1 Inverse-linear (sound in 2-D).
+
+      decay = 2 Inverse-square (sound in 3-D, light, gravity).
+
+      Because radius is in pixels, decay controls how “local” each beacon’s
+      influence feels.
+
+    3. amp:
+      amp is a scalar on the final acceleration term (before friction).
+      Higher values:
+
+      Make the particles accelerate harder toward/away from the beacon.
+
+      Increase wave steepness and therefore kinetic-energy injection.
+
+      You can treat it like a force constant in N-body physics (with the time unit
+      already baked in).
+
+    4. Propagation speed (C)
+      The delay term r / C makes the sine oscillation propagate as a circular wave front:
+
+      Wavelength (simulation units) λ = C / freq.
+
+      In real pixels you literally see the “rings” move outward at C px · s-sim⁻¹.
+
+      Raise C → longer wavelengths and faster-moving rings.
+
+    Putting it together
+    | parameter | what you’ll observe when you tweak it                                                                           |
+    | --------- | --------------------------------------------------------------------------------------------------------------- |
+    | **freq**  | Rings get closer (higher f) or wider (lower f) over the same sim-time; real-world Hz also scales by `dt × FPS`. |
+    | **amp**   | Particles shake more vigorously; high values can overpower the inter-particle attraction table.                 |
+    | **decay** | Low d ⇒ beacon affects the whole domain; high d ⇒ only particles near the beacon feel it.                       |
+    | **phase** | Just shifts the sine, useful for synchronising multiple beacons.                                                |
+    | **C**     | “Speed of sound” in your universe — how quickly a disturbance reaches a particle **r** pixels away.             |
+    
+    What each slider really changes
+    Raise freq → the beacon pulses faster everywhere; wavelength may shrink because λ = C / f, but the local oscillation period definitely shortens.
+    Raise C → the pulses spread outward faster and the wavelength grows, yet the oscillation period at any fixed point stays the same.
+    */
+
+    /* beacon storage ----------------------------------------------------*/
+    // x,y,freq,amp,decay,phase,grid,useWave
+    const B_STRIDE=8, 
+          beaconBytes=MAX_BEACONS*B_STRIDE*4,
+          beaconArr = new Float32Array(beaconBytes/4);
+    let   beaconCount = cfg.beaconCount ?? 0;
+    if (cfg.beacons) beaconArr.set(cfg.beacons);
+    const beaconBuf=device.createBuffer({size:beaconBytes,
+      usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
+    queue.writeBuffer(beaconBuf,0,beaconArr);
+
+    const waveBytes = MAX_BEACONS * WAVE_LEN * 4;
+    const waveArr   = new Float32Array(waveBytes / 4);
+    for (let i = 0; i < MAX_BEACONS; ++i) {
+      for (let j = 0; j < WAVE_LEN; ++j) {
+        waveArr[i * WAVE_LEN + j] = Math.sin(2 * Math.PI * j / WAVE_LEN);
+      }
+    }
+    const waveBuf = device.createBuffer({size:waveBytes,
+      usage:GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST});
+    queue.writeBuffer(waveBuf, 0, waveArr);
+
+    /* helpers -----------------------------------------------------------*/
+    const DEFAULTS={freq:1, amp:100, decay:0.1, phase:0.0};
+    const uploadBeacons=()=>queue.writeBuffer(beaconBuf,0,beaconArr);
+    const uploadWaves  =()=>queue.writeBuffer(waveBuf,0,waveArr);
+    function beaconOffset(i){return i*B_STRIDE;}
+    function createBeacon(i,x,y,f=DEFAULTS.freq,a=DEFAULTS.amp,d=DEFAULTS.decay,
+                          p=DEFAULTS.phase,grid=0){
+      const o = beaconOffset(i);
+      beaconArr.set([x,y,f,a,d,p,grid,0], o);
+    }
+    function getGrid(i){ return beaconArr[beaconOffset(i)+GRID_FLAG] > 0.5; }
+    function setGrid(i,val){
+      beaconArr[beaconOffset(i)+GRID_FLAG] = val ? 1 : 0;
+      uploadBeacons();                // keep buffer in-sync
+    }
+    function updateBeaconPos(i,x,y){
+      const o=beaconOffset(i); beaconArr[o]=x; beaconArr[o+1]=y; }
+    function copyBeacon(idx){
+      if (beaconCount>=MAX_BEACONS) return -1;
+      const oSrc=beaconOffset(idx), oDst=beaconOffset(beaconCount);
+      beaconArr.set(beaconArr.subarray(oSrc,oSrc+B_STRIDE),oDst);
+      waveArr.set(waveArr.subarray(idx * WAVE_LEN, (idx + 1) * WAVE_LEN), beaconCount * WAVE_LEN);
+      return ++beaconCount, uploadWaves(), uploadBeacons(), beaconCount-1;
+    }
+    function deleteBeacon(idx){
+      if(idx<0||idx>=beaconCount) return;
+      stopLiveForBeacon(idx);
+      if(idx<beaconCount-1){
+        const last = beaconCount - 1;
+        beaconArr.set(beaconArr.subarray(beaconOffset(last),
+                                         beaconOffset(last + 1)),
+                      beaconOffset(idx));
+        waveArr.set(waveArr.subarray(last * WAVE_LEN, (last + 1) * WAVE_LEN), idx * WAVE_LEN);
+        const liveLast = liveWaveSources.get(last);
+        if (liveLast) { liveWaveSources.set(idx, liveLast); liveWaveSources.delete(last); }
+      }
+      beaconCount--; uploadWaves(); uploadBeacons(); clearSelection(); closePanel();
+    }
+
+    /* selection state & overlay draw -----------------------------------*/
+    const selected=new Set(); let selIdx=-1, rectSelect=false,
+          dragIdx=-1, dragGroup=false, placing=false;
+    let rectStart=[0,0],rectEnd=[0,0],dragStart=[0,0],
+        groupInitPos=new Map();
+    function clearSelection(){selected.clear(); drawOverlay();}
+    function drawBoundaryOverlay(){
+      const n  = Math.max(3, Math.min(128, Math.round(boundary.sides)));
+      const cx = domain.w * 0.5, cy = domain.h * 0.5, R = boundary.radius;
+      octx.save();
+      octx.strokeStyle = 'rgba(255,255,255,0.35)';
+      octx.lineWidth = 2;
+      octx.beginPath();
+      for (let k = 0; k < n; ++k) {
+        const a = boundary.rotation + Math.PI * 2 * k / n;
+        const x = cx + R * Math.cos(a), y = cy + R * Math.sin(a);
+        if (k === 0) octx.moveTo(x, y); else octx.lineTo(x, y);
+      }
+      octx.closePath();
+      octx.stroke();
+      octx.restore();
+    }
+    function drawOverlay(){
+      octx.clearRect(0,0,oCanvas.width,oCanvas.height);
+      drawBoundaryOverlay();
+      if(rectSelect){
+        const x0=Math.min(rectStart[0],rectEnd[0]),
+              y0=Math.min(rectStart[1],rectEnd[1]),
+              w =Math.abs(rectEnd[0]-rectStart[0]),
+              h =Math.abs(rectEnd[1]-rectStart[1]);
+        octx.setLineDash([4,4]); octx.strokeStyle='#ff0';
+        octx.strokeRect(x0,y0,w,h); octx.setLineDash([]);
+      }
+      for(let i=0;i<beaconCount;++i){
+        const x=beaconArr[beaconOffset(i)], y=beaconArr[beaconOffset(i)+1];
+        octx.strokeStyle = selected.has(i)?'#ff0':(i===selIdx?'#0ff':'#0f0');
+        octx.lineWidth=2; octx.beginPath(); octx.arc(x,y,6,0,6.283); octx.stroke();
+      }
+      for (let i = 0; i < beaconCount; ++i) {
+        if (!getGrid(i)) continue;
+
+        const bx = beaconArr[beaconOffset(i)    ];     // centre X
+        const by = beaconArr[beaconOffset(i) + 1];     // centre Y
+        const f  = beaconArr[beaconOffset(i) + 2] || 1;
+        const λ  = simParams.C / f;                    // pixels
+
+        if (λ < 4) continue;                           // too fine → ignore
+
+        octx.save();
+        octx.strokeStyle = 'rgba(255,255,255,0.15)';
+        octx.lineWidth   = 10;
+
+        /* verticals, anchored on bx */
+        for (let x = bx; x >= 0;           x -= λ) { octx.beginPath(); octx.moveTo(x,0);                 octx.lineTo(x,oCanvas.height); octx.stroke(); }
+        for (let x = bx + λ; x <= oCanvas.width; x += λ) { octx.beginPath(); octx.moveTo(x,0);                 octx.lineTo(x,oCanvas.height); octx.stroke(); }
+
+        /* horizontals, anchored on by */
+        for (let y = by; y >= 0;           y -= λ) { octx.beginPath(); octx.moveTo(0,y);                 octx.lineTo(oCanvas.width,y); octx.stroke(); }
+        for (let y = by + λ; y <= oCanvas.height; y += λ) { octx.beginPath(); octx.moveTo(0,y);                 octx.lineTo(oCanvas.width,y); octx.stroke(); }
+
+        octx.restore();
+      }      
+    }
+
+    /* GUI panels (single, add, group) ----------------------------------*/
+    function relocateGroup(indices, mode){
+      if(indices.length<2) return;
+      const xs = indices.map(i=>beaconArr[i*B_STRIDE]);
+      const ys = indices.map(i=>beaconArr[i*B_STRIDE+1]);
+      const cx = xs.reduce((a,b)=>a+b,0)/indices.length;
+      const cy = ys.reduce((a,b)=>a+b,0)/indices.length;
+
+      switch(mode){
+        case 'circle':{
+          const r = Math.max(...indices.map(i=>Math.hypot(beaconArr[i*B_STRIDE]-cx,beaconArr[i*B_STRIDE+1]-cy))) || 60;
+          indices.forEach((idx,k)=>{
+            const ang = k*2*Math.PI/indices.length;
+            updateBeaconPos(idx, cx + r*Math.cos(ang), cy + r*Math.sin(ang));
+          });
+        }break;
+        case 'lineH':{
+          const minX=Math.min(...xs), maxX=Math.max(...xs);
+          const step = (maxX-minX)/(indices.length-1||1);
+          const y = cy;
+          indices.sort((a,b)=>beaconArr[a*B_STRIDE]-beaconArr[b*B_STRIDE])
+                 .forEach((idx,k)=>{ updateBeaconPos(idx, minX + k*step, y); });
+        }break;
+        case 'lineV':{
+          const minY=Math.min(...ys), maxY=Math.max(...ys);
+          const step = (maxY-minY)/(indices.length-1||1);
+          const x = cx;
+          indices.sort((a,b)=>beaconArr[a*B_STRIDE+1]-beaconArr[b*B_STRIDE+1])
+                 .forEach((idx,k)=>{ updateBeaconPos(idx, x, minY + k*step); });
+        }break;
+        case 'hex':{
+          const r=60;
+          const baseAng=Math.PI/6; // flat‑top hexagon
+          indices.forEach((idx,k)=>{
+            const ang = baseAng + k*2*Math.PI/6;
+            updateBeaconPos(idx, cx + r*Math.cos(ang), cy + r*Math.sin(ang));
+          });
+        }break;
+      }
+      uploadBeacons();
+      drawOverlay();
+    }
+    let activePanel=null;
+    function closePanel(){ activePanel?.destroy(); activePanel=null; }
+    function makePanel(title,x,y){
+      const gui=new GUI({width:180,autoPlace:false});
+      document.body.appendChild(gui.domElement);
+      Object.assign(gui.domElement.style,
+       {position:'absolute',left:`${x+12}px`,top:`${y+12}px`,zIndex:1000});
+      gui.title(title); activePanel=gui; return gui;
+    }
+
+    let audioCtx = null;
+    const liveWaveSources = new Map();
+
+    async function ensureAudioContext() {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) throw new Error('Web Audio is not available in this browser.');
+      audioCtx ??= new AC();
+      if (audioCtx.state !== 'running') await audioCtx.resume();
+      return audioCtx;
+    }
+
+    function fillWaveForBeacon(i, samples, normalize = true) {
+      if (!samples?.length) return false;
+      const src = samples instanceof Float32Array ? samples : Float32Array.from(samples);
+      let mean = 0, peak = 1;
+      if (normalize) {
+        for (let k = 0; k < src.length; ++k) mean += src[k];
+        mean /= src.length;
+        peak = 1e-6;
+        for (let k = 0; k < src.length; ++k) peak = Math.max(peak, Math.abs(src[k] - mean));
+      }
+
+      const base = i * WAVE_LEN;
+      for (let j = 0; j < WAVE_LEN; ++j) {
+        const p = src.length === 1 ? 0 : j * (src.length - 1) / (WAVE_LEN - 1);
+        const i0 = Math.floor(p), i1 = Math.min(src.length - 1, i0 + 1);
+        const t = p - i0;
+        const v = (src[i0] * (1 - t) + src[i1] * t - mean) / peak;
+        waveArr[base + j] = Math.max(-1, Math.min(1, v));
+      }
+      beaconArr[beaconOffset(i)+WAVE_FLAG] = 1;
+      return true;
+    }
+
+    function writeWaveForBeacon(i, samples) {
+      if (!fillWaveForBeacon(i, samples)) return;
+      uploadWaves();
+      uploadBeacons();
+    }
+
+    function audioBufferToMonoSamples(buffer, seconds = 8) {
+      const len = Math.min(buffer.length, Math.max(1, Math.floor(buffer.sampleRate * seconds)));
+      const out = new Float32Array(len);
+      for (let ch = 0; ch < buffer.numberOfChannels; ++ch) {
+        const data = buffer.getChannelData(ch);
+        for (let i = 0; i < len; ++i) out[i] += data[i] / buffer.numberOfChannels;
+      }
+      return out;
+    }
+
+    function loadCSVForBeacon(i){
+      const el = Object.assign(document.createElement('input'),
+                               {type:'file', accept:'.csv,.txt'});
+      el.click();
+      el.onchange = () => el.files?.[0]?.text().then(txt => {
+        const nums = txt.trim().split(/[,\s]+/).map(Number).filter(n=>!isNaN(n));
+        if(nums.length===0) return;
+        writeWaveForBeacon(i, nums);
+      });
+    }
+
+    function loadAudioFileForBeacon(i){
+      const el = Object.assign(document.createElement('input'),
+                               {type:'file', accept:'audio/*,.wav,.mp3,.m4a,.ogg,.flac'});
+      el.click();
+      el.onchange = async () => {
+        const file = el.files?.[0];
+        if (!file) return;
+        try {
+          const ctx = await ensureAudioContext();
+          const buf = await file.arrayBuffer();
+          const audioBuffer = await ctx.decodeAudioData(buf);
+          writeWaveForBeacon(i, audioBufferToMonoSamples(audioBuffer));
+        } catch (err) {
+          alert('Could not decode this audio file:\n' + err.message);
+          console.error(err);
+        }
+      };
+    }
+
+    async function loadYouTubeForBeacon(i){
+      const url = prompt('Paste a YouTube URL. Requires the local youtube-waveform-server.mjs helper.');
+      if (!url) return;
+      try {
+        const res = await fetch(`/api/youtube/waveform?url=${encodeURIComponent(url)}&samples=${WAVE_LEN}&seconds=8`);
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        writeWaveForBeacon(i, data.samples);
+      } catch (err) {
+        alert('Could not load YouTube audio. Run the included helper server and open this page from http://localhost:8787.\n\n' + err.message);
+        console.error(err);
+      }
+    }
+
+    function stopLiveForBeacon(i){
+      const src = liveWaveSources.get(i);
+      if (!src) return;
+      try { src.source?.disconnect(); } catch {}
+      try { src.analyser?.disconnect(); } catch {}
+      try { src.stream?.getTracks().forEach(t => t.stop()); } catch {}
+      liveWaveSources.delete(i);
+    }
+
+    async function useMicForBeacon(i){
+      stopLiveForBeacon(i);
+      try {
+        const ctx = await ensureAudioContext();
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video:false,
+          audio:{
+            echoCancellation:false,
+            noiseSuppression:false,
+            autoGainControl:false
+          }
+        });
+        const source = ctx.createMediaStreamSource(stream);
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 1024;
+        analyser.smoothingTimeConstant = 0.0;
+        source.connect(analyser);
+        liveWaveSources.set(i, { type:'mic', stream, source, analyser, data:new Float32Array(analyser.fftSize), normalize:false });
+        beaconArr[beaconOffset(i)+WAVE_FLAG] = 1;
+        uploadBeacons();
+      } catch (err) {
+        alert('Could not start microphone input:\n' + err.message);
+        console.error(err);
+      }
+    }
+
+    function pumpLiveAudioWaves(){
+      if (liveWaveSources.size === 0) return;
+      let changed = false;
+      for (const [i, src] of liveWaveSources) {
+        if (i >= beaconCount) continue;
+        src.analyser.getFloatTimeDomainData(src.data);
+        changed = fillWaveForBeacon(i, src.data, src.normalize ?? true) || changed;
+      }
+      if (changed) {
+        uploadWaves();
+        uploadBeacons();
+      }
+    }
+    function openBeaconEditor(idx, px, py) {
+      closePanel();
+
+      const o = beaconOffset(idx);            // byte offset into beaconArr
+
+      // -------- data model shown in the GUI -----------------------------
+      const proxy = {
+        freq : beaconArr[o + 2],
+        amp  : beaconArr[o + 3],
+        decay: beaconArr[o + 4],
+        phase: beaconArr[o + 5],
+
+        grid : !!beaconArr[o + GRID_FLAG],
+        useWave: !!beaconArr[o + WAVE_FLAG],
+
+        get realHz(){ return (this.freq * simParams.dt * fps).toFixed(2); }
+      };
+
+      const gui = makePanel(`Beacon ${idx}`, px, py);
+
+      gui.add(proxy, 'freq' , 0.1, 100, 0.001)
+        .onChange(v => { beaconArr[o + 2] = v; uploadBeacons(); });
+
+      gui.add(proxy, 'amp'  , 0.1, 200, 0.001)
+        .onChange(v => { beaconArr[o + 3] = v; uploadBeacons(); });
+
+      gui.add(proxy, 'decay', 0.1,   3, 0.001)
+        .onChange(v => { beaconArr[o + 4] = v; uploadBeacons(); });
+
+      gui.add(proxy, 'phase', -Math.PI, Math.PI, 0.001)
+        .onChange(v => { beaconArr[o + 5] = v; uploadBeacons(); });
+
+      /* read-only field that keeps refreshing because of .listen() */
+      gui.add(proxy, 'realHz').name('real Hz (freq x dt x FPS)').listen();
+
+      gui.add(proxy, 'useWave')
+        .name('use custom wave')
+        .onChange(v => { beaconArr[o + WAVE_FLAG] = v ? 1 : 0; uploadBeacons(); });
+
+      gui.add({ loadAudio(){ loadAudioFileForBeacon(idx); } }, 'loadAudio').name('🎵 Load audio file');
+      gui.add({ loadYouTube(){ loadYouTubeForBeacon(idx); } }, 'loadYouTube').name('🔗 Load YouTube');
+      gui.add({ useMic(){ useMicForBeacon(idx); } }, 'useMic').name('🎙 Microphone');
+      gui.add({ stopAudio(){ stopLiveForBeacon(idx); } }, 'stopAudio').name('⏹ Stop mic');
+      gui.add({ loadCSV(){ loadCSVForBeacon(idx); } }, 'loadCSV').name('📄 Load CSV');
+
+      gui.add(proxy,'grid')
+        .name('λ-grid')
+        .onChange(v => setGrid(idx, v));
+        
+      gui.add({ copy() {
+          const n = copyBeacon(idx);
+          if (n >= 0) openBeaconEditor(n, px + 16, py + 16);
+        }}, 'copy');
+
+      gui.add({ del() { deleteBeacon(idx); } }, 'del').name('🗑 Delete');
+    }
+
+    function openAddPanel (xSim, ySim, px, py) {
+      if (beaconCount >= MAX_BEACONS) return;
+      closePanel();
+
+      /* ---------- data model shown in the panel ------------------------- */
+      const proxy = {
+        ...DEFAULTS,           // freq, amp, decay defaults
+        phase : 0,             // new slider starts at 0 rad
+        useWave : false,
+
+        /* live preview of wall-clock frequency */
+        get realHz () {
+          return (this.freq * simParams.dt * fps).toFixed(2);
+        },
+
+        add () {               // create-button callback
+          createBeacon(
+            beaconCount,
+            xSim, ySim,
+            proxy.freq,
+            proxy.amp,
+            proxy.decay,
+            proxy.phase
+          );
+          if (proxy.useWave) {
+            beaconArr[beaconOffset(beaconCount)+WAVE_FLAG] = 1;
+          }
+          beaconCount++;
+          uploadBeacons();
+          closePanel();
+          drawOverlay();
+        }
+      };
+
+      const gui = makePanel('Add Beacon', px, py);
+      gui.add(proxy, 'freq' , 0.01, 100, 0.0001);
+      gui.add(proxy, 'amp'  , 0.01, 200, 0.0001);
+      gui.add(proxy, 'decay', 0.01, 3, 0.0001);
+      gui.add(proxy, 'phase', -Math.PI, Math.PI, 0.0001);
+      gui.add(proxy, 'useWave').name('use custom wave');
+      gui.add(proxy, 'realHz').name('freq (Hz)').listen();   // read-only, auto-updates
+      gui.add(proxy, 'add').name('➕ Create');
+    }
+    /* ---------------------------------------------------------------------
+      Group panel (right‑click when multiple selected) ------------------ */
+    function openGroupPanel (indices, pageX, pageY) {
+      closePanel();
+      const gui = makePanel(`Group (${indices.length})`, pageX, pageY);
+
+      /* ─────────────  layout helpers  ───────────── */
+      const ops = {
+        lineHoriz () { relocateGroup(indices, 'lineH'); },
+        lineVert  () { relocateGroup(indices, 'lineV'); },
+        circle    () { relocateGroup(indices, 'circle'); },
+        hexagon   () { if (indices.length === 6) relocateGroup(indices, 'hex'); },
+        clearSel  () { clearSelection(); closePanel(); }
+      };
+      gui.add(ops, 'lineHoriz').name('⟷ Line H');
+      gui.add(ops, 'lineVert' ).name('⇵ Line V');
+      gui.add(ops, 'circle'   ).name('◯ Circle');
+      if (indices.length === 6) gui.add(ops, 'hexagon').name('⬡ Hexagon');
+      gui.add(ops, 'clearSel' ).name('✕ Clear');
+
+      /* ─────────────  batch-edit fields  ────────── */
+      const avg = field =>
+        indices.reduce((s, i) => s + beaconArr[i * B_STRIDE + field], 0) /
+        indices.length;
+
+      const proxy = {
+        freq  : avg(2),
+        amp   : avg(3),
+        decay : avg(4),
+        phase : avg(5),
+
+        /* live preview of wall-clock Hz for the current slider settings */
+        get realHz () {
+          return (this.freq * simParams.dt * fps).toFixed(2);
+        }
+      };
+
+      gui.add(proxy, 'freq' , 0.01, 100, 0.0001)
+        .name('freq ↺')
+        .onChange(v => {
+          indices.forEach(i => { beaconArr[i * B_STRIDE + 2] = v; });
+          uploadBeacons();
+        });
+
+      gui.add(proxy, 'amp'  , 0.01, 200, 0.0001)
+        .name('amp  ↺')
+        .onChange(v => {
+          indices.forEach(i => { beaconArr[i * B_STRIDE + 3] = v; });
+          uploadBeacons();
+        });
+
+      gui.add(proxy, 'decay', 0.01, 3, 0.0001)
+        .name('decay ↺')
+        .onChange(v => {
+          indices.forEach(i => { beaconArr[i * B_STRIDE + 4] = v; });
+          uploadBeacons();
+        });
+
+      gui.add(proxy, 'phase', -Math.PI, Math.PI, .0001)
+        .name('phase ↺')
+        .onChange(v => {
+          indices.forEach(i => { beaconArr[i * B_STRIDE + 5] = v; });
+          uploadBeacons();
+        });
+
+      gui.add(proxy, 'realHz').name('freq (Hz)').listen();   // read-only display
+    }
+    
+    /* pointer helpers & event listeners --------------------------------*/
+    canvas.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      const [xSim, ySim] = pos(e);
+      // Find nearest beacon within 12 px
+      let closest = -1;
+      let bestD2  = 144; // 12²
+      for (let i = 0; i < beaconCount; ++i) {
+        const dx = beaconArr[i * B_STRIDE]     - xSim;
+        const dy = beaconArr[i * B_STRIDE + 1] - ySim;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < bestD2) { bestD2 = d2; closest = i; }
+      }
+
+      if(selected.size>1){
+        // clicking anywhere opens group panel
+        openGroupPanel([...selected], e.pageX, e.pageY);
+        return;
+      }
+
+      if (closest >= 0) {
+        openBeaconEditor(closest, e.pageX, e.pageY);
+      } else {
+        openAddPanel(xSim, ySim, e.pageX, e.pageY);
+      }
+    });
+
+    /* ---------------------------------------------------------------------
+       Close panel on outside click -------------------------------------- */
+    window.addEventListener('pointerdown', e => {
+      if (!activePanel) return;
+      if (activePanel.domElement.contains(e.target)) return; // click inside panel
+      if (e.button === 2) return;                            // right‑click handled above
+      closePanel();
+    });
+    
+    const pos=e=>{
+      const r=canvas.getBoundingClientRect();return[e.clientX-r.left,e.clientY-r.top];
+    };
+    /* ────────── interaction ─────────── */
+
+    canvas.addEventListener('pointerdown',e=>{
+      const [x,y]=pos(e);
+      let hitIdx=-1;
+      for(let i=0;i<beaconCount;++i){const bx=beaconArr[i*B_STRIDE],by=beaconArr[i*B_STRIDE+1];if((bx-x)**2+(by-y)**2<100){hitIdx=i;break;}}
+
+      // Ctrl‑click toggles selection membership ---------------------------
+      if(e.ctrlKey && hitIdx>=0){
+        if(selected.has(hitIdx)) selected.delete(hitIdx); else selected.add(hitIdx);
+        selIdx=-1;
+        drawOverlay();
+        return; // stop
+      }
+
+      dragIdx=-1; dragGroup=false;
+
+      // BEGIN GROUP DRAG --------------------------------------------------
+      if(hitIdx>=0 && selected.size>1 && selected.has(hitIdx)){
+        dragGroup=true;
+        dragStart=[x,y];
+        groupInitPos.clear();
+        selected.forEach(idx=>{
+          groupInitPos.set(idx,[beaconArr[idx*B_STRIDE],beaconArr[idx*B_STRIDE+1]]);
+        });
+        return;
+      }
+
+      // SINGLE DRAG -------------------------------------------------------
+      if(hitIdx>=0){
+        dragIdx=hitIdx;
+        selIdx=hitIdx;
+        clearSelection();
+        drawOverlay();
+        return;
+      }
+
+      // Place new beacon if in placing mode ------------------------------
+      if(placing && beaconCount<MAX_BEACONS){
+        createBeacon(beaconCount,x,y); beaconCount++; uploadBeacons(); selIdx=beaconCount-1; clearSelection(); placing=false;
+        return;
+      }
+
+      // Otherwise: begin rectangle selection -----------------------------
+      if(e.button===0){
+        rectSelect=true;
+        rectStart=[x,y];
+        rectEnd=[x,y];
+        clearSelection();
+        selIdx=-1;
+        drawOverlay();
+      }
+    });
+
+    canvas.addEventListener('pointermove', e=>{
+      const [x, y] = pos(e);
+      if (dragIdx >= 0) {
+        updateBeaconPos(dragIdx, x, y);
+        uploadBeacons();
+        drawOverlay();
+      } else if(dragGroup){
+        const dx=x-dragStart[0];
+        const dy=y-dragStart[1];
+        groupInitPos.forEach(([x0,y0],idx)=>{
+          updateBeaconPos(idx,x0+dx,y0+dy);
+        });
+        uploadBeacons();
+        drawOverlay();
+      } else if(rectSelect){
+        rectEnd=[x,y];
+        drawOverlay();
+      }
+    });
+
+    window.addEventListener('pointerup', e=>{
+      dragIdx=-1;
+      if(dragGroup){ dragGroup=false; groupInitPos.clear(); return; }
+      if(rectSelect){
+        const [x,y]=pos(e);
+        rectEnd=[x,y];
+        rectSelect=false;
+        const x0=Math.min(rectStart[0],rectEnd[0]);
+        const x1=Math.max(rectStart[0],rectEnd[0]);
+        const y0=Math.min(rectStart[1],rectEnd[1]);
+        const y1=Math.max(rectStart[1],rectEnd[1]);
+        clearSelection();
+        for(let i=0;i<beaconCount;++i){
+          const bx=beaconArr[i*B_STRIDE], by=beaconArr[i*B_STRIDE+1];
+          if(bx>=x0 && bx<=x1 && by>=y0 && by<=y1){ selected.add(i); }
+        }
+        drawOverlay();
+      }
+    });
+
+    /* ────────── overlay draw ────────── */
+    function drawOverlay(){
+      octx.clearRect(0,0,oCanvas.width,oCanvas.height);
+      drawBoundaryOverlay();
+
+      // draw selection rectangle if active
+      if(rectSelect){
+        const x0=Math.min(rectStart[0],rectEnd[0]);
+        const y0=Math.min(rectStart[1],rectEnd[1]);
+        const w=Math.abs(rectEnd[0]-rectStart[0]);
+        const h=Math.abs(rectEnd[1]-rectStart[1]);
+        octx.strokeStyle='#ff0';
+        octx.lineWidth=1;
+        octx.setLineDash([4,4]);
+        octx.strokeRect(x0,y0,w,h);
+        octx.setLineDash([]);
+      }
+
+      for(let i=0;i<beaconCount;++i){
+        const x=beaconArr[i*B_STRIDE],y=beaconArr[i*B_STRIDE+1];
+        octx.strokeStyle = selected.has(i) ? '#ff0' : (i===selIdx?'#0ff':'#0f0');
+        octx.lineWidth=2;
+        octx.beginPath();
+        octx.arc(x,y,6,0,Math.PI*2);
+        octx.stroke();
+      }
+      for (let i = 0; i < beaconCount; ++i) {
+        if (!getGrid(i)) continue;
+
+        const bx = beaconArr[beaconOffset(i)    ];     // centre X
+        const by = beaconArr[beaconOffset(i) + 1];     // centre Y
+        const f  = beaconArr[beaconOffset(i) + 2] || 1;
+        const λ  = simParams.C / f;                    // pixels
+
+        if (λ < 4) continue;                           // too fine → ignore
+
+        octx.save();
+        octx.strokeStyle = 'rgba(255,255,255,0.15)';
+        octx.lineWidth   = 1;
+
+        /* verticals, anchored on bx */
+        for (let x = bx; x >= 0;           x -= λ) { octx.beginPath(); octx.moveTo(x,0);                 octx.lineTo(x,oCanvas.height); octx.stroke(); }
+        for (let x = bx + λ; x <= oCanvas.width; x += λ) { octx.beginPath(); octx.moveTo(x,0);                 octx.lineTo(x,oCanvas.height); octx.stroke(); }
+
+        /* horizontals, anchored on by */
+        for (let y = by; y >= 0;           y -= λ) { octx.beginPath(); octx.moveTo(0,y);                 octx.lineTo(oCanvas.width,y); octx.stroke(); }
+        for (let y = by + λ; y <= oCanvas.height; y += λ) { octx.beginPath(); octx.moveTo(0,y);                 octx.lineTo(oCanvas.width,y); octx.stroke(); }
+
+        octx.restore();
+      }            
+    }
+
+    drawOverlay();
+    /* ******************** END OF BEACON MODULE *************************/
+
+    /********************  SECTION 1C ─ UI CONTROLS **********************/
+    function kindForLayout(mode, i, x, y) {
+      if (kindCount <= 1) return 0;
+      const cx = domain.w * 0.5, cy = domain.h * 0.5;
+      switch (mode) {
+        case 'Index bands':
+          return Math.floor(i * kindCount / particleCount) % kindCount;
+        case 'Horizontal bands':
+          return Math.min(kindCount - 1, Math.max(0, Math.floor((y / domain.h) * kindCount)));
+        case 'Radial wedges': {
+          const a = (Math.atan2(y - cy, x - cx) + Math.PI * 2) % (Math.PI * 2);
+          return Math.floor(a / (Math.PI * 2) * kindCount) % kindCount;
+        }
+        case 'Concentric rings': {
+          const r = Math.hypot(x - cx, y - cy) / Math.max(1, boundary.radius);
+          return Math.min(kindCount - 1, Math.floor(r * kindCount));
+        }
+        case 'Random':
+        default:
+          return Math.floor(Math.random() * kindCount);
+      }
+    }
+    const particleOps = {
+      spawnSpeed : 2.0,
+      kindLayout : 'Random',
+      resetParticles () {
+        for (let i = 0, o = 0; i < particleCount; ++i, o += P_STRIDE) {
+          const [x, y] = randomPointInBoundary();
+          const angle = Math.random() * Math.PI * 2;
+          const speed = Math.random() * particleOps.spawnSpeed;
+          pInit[o] = x; pInit[o + 1] = y;
+          pInit[o + 2] = Math.cos(angle) * speed;
+          pInit[o + 3] = Math.sin(angle) * speed;
+          pInit[o + 4] = kindForLayout(particleOps.kindLayout, i, x, y);
+        }
+        queue.writeBuffer(bufA, 0, pInit);
+        queue.writeBuffer(bufB, 0, pInit);
+      }
+    };
+
+    const runtimeGUI=new GUI();
+    const simGUI = runtimeGUI.addFolder('Simulation');
+    simGUI.add(simParams,'dt',0.001,1,0.0001).name('Time step');
+    simGUI.add(simParams,'friction',0.80,1.02,0.0001).name('Velocity damping');
+    simGUI.add(simParams, 'speedLimit', 0, 1000, 0.1).name('Max speed (0=off)');
+
+    const interactionGUI = runtimeGUI.addFolder('Particle interactions');
+    interactionGUI.add(simParams, 'forceScale', -5, 5, 0.001).name('Global force scale');
+    interactionGUI.add(simParams, 'radiusScale', 0.01, 5, 0.001).name('Global radius scale');
+
+    function forcePairLabel(a,b){ return `kind ${a} ← source ${b}`; }
+    const pairLabels = [];
+    const pairForLabel = new Map();
+    for (let a = 0; a < kindCount; ++a) for (let b = 0; b < kindCount; ++b) {
+      const label = forcePairLabel(a,b);
+      pairLabels.push(label);
+      pairForLabel.set(label, [a,b]);
+    }
+    const forceProxy = {
+      preset : FORCE_PRESET_NAMES.includes(preset) ? preset : 'Random',
+      pair   : pairLabels[0],
+      mirror : false,
+      radius : fData[0],
+      strength : fData[1]
+    };
+    let forceRadiusCtrl, forceStrengthCtrl, forcePairCtrl, forcePresetCtrl;
+    function selectedForcePair(){ return pairForLabel.get(forceProxy.pair) ?? [0,0]; }
+    function refreshForceProxy(){
+      const [a,b] = selectedForcePair();
+      const o = forceOffset(a,b);
+      forceProxy.radius = fData[o];
+      forceProxy.strength = fData[o + 1];
+      forceRadiusCtrl?.updateDisplay();
+      forceStrengthCtrl?.updateDisplay();
+      forcePairCtrl?.updateDisplay();
+      forcePresetCtrl?.updateDisplay();
+    }
+    function commitSelectedForce(){
+      const [a,b] = selectedForcePair();
+      setForce(a,b,forceProxy.radius,forceProxy.strength,forceProxy.mirror);
+    }
+    forcePresetCtrl = interactionGUI.add(forceProxy, 'preset', FORCE_PRESET_NAMES)
+      .name('Matrix preset')
+      .onChange(v => { applyForcePreset(v); refreshForceProxy(); });
+    forcePairCtrl = interactionGUI.add(forceProxy, 'pair', pairLabels)
+      .name('Edit pair')
+      .onChange(refreshForceProxy);
+    forceRadiusCtrl = interactionGUI.add(forceProxy, 'radius', 0, 180, 0.01)
+      .name('Pair radius')
+      .onChange(v => { forceProxy.radius = v; commitSelectedForce(); });
+    forceStrengthCtrl = interactionGUI.add(forceProxy, 'strength', -2.5, 2.5, 0.001)
+      .name('Pair strength')
+      .onChange(v => { forceProxy.strength = v; commitSelectedForce(); });
+    let forceMirrorCtrl = interactionGUI.add(forceProxy, 'mirror').name('Mirror A↔B edits');
+
+    const HEATMAP_TOOLS = ['Inspect / sample','Paint attract','Paint repel','Zero force'];
+    const heatmapState = {
+      visible : true,
+      tool    : 'Inspect / sample',
+      brushRadius : Math.max(0, Math.round(forceProxy.radius || 40)),
+      brushStrength : Math.max(0, Math.abs(Number(forceProxy.strength || 0.25))),
+      writeRadius : true,
+      showValues : true,
+      mirror : false
+    };
+    let heatmapPanel = null;
+    let heatmapGrid = null;
+    let heatmapPainting = false;
+    let heatmapStatus = null;
+    let heatmapBrushStatus = null;
+    let heatmapStrengthOut = null;
+    let heatmapRadiusOut = null;
+    let heatmapStrengthNum = null;
+    let heatmapRadiusNum = null;
+
+    function heatClamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
+    function fmtSigned(v, digits=3){ return `${v >= 0 ? '+' : ''}${Number(v).toFixed(digits)}`; }
+    function cellValues(a,b){ const o = forceOffset(a,b); return { radius:fData[o], strength:fData[o+1] }; }
+    function selectedForceValues(){ const [a,b] = selectedForcePair(); return { a, b, ...cellValues(a,b) }; }
+    function toolSignedStrength(){
+      const mag = Math.max(0, Number(heatmapState.brushStrength) || 0);
+      if (heatmapState.tool === 'Paint attract') return mag;
+      if (heatmapState.tool === 'Paint repel') return -mag;
+      if (heatmapState.tool === 'Zero force') return 0;
+      const cur = selectedForceValues().strength;
+      return Math.sign(cur || 1) * mag;
+    }
+    function brushVerb(){
+      if (heatmapState.tool === 'Paint attract') return 'writes ATTRACT';
+      if (heatmapState.tool === 'Paint repel') return 'writes REPEL';
+      if (heatmapState.tool === 'Zero force') return 'writes ZERO strength';
+      return 'INSPECTS / SAMPLES';
+    }
+    function syncHeatmapToolButtons(){
+      if (!heatmapPanel) return;
+      heatmapPanel.querySelectorAll('[data-tool]').forEach(btn => {
+        const active = btn.dataset.tool === heatmapState.tool;
+        btn.classList.toggle('active', active);
+        btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+      });
+    }
+    function updateHeatmapReadouts(){
+      heatmapState.brushStrength = heatClamp(Number(heatmapState.brushStrength) || 0, 0, 2.5);
+      heatmapState.brushRadius = heatClamp(Number(heatmapState.brushRadius) || 0, 0, 180);
+      const sel = selectedForceValues();
+      const signedBrush = toolSignedStrength();
+      if (heatmapStrengthOut) heatmapStrengthOut.textContent = heatmapState.brushStrength.toFixed(3);
+      if (heatmapRadiusOut) heatmapRadiusOut.textContent = `${heatmapState.brushRadius.toFixed(1)} px`;
+      if (heatmapStrengthNum && Number(heatmapStrengthNum.value) !== heatmapState.brushStrength) heatmapStrengthNum.value = heatmapState.brushStrength.toFixed(3);
+      if (heatmapRadiusNum && Number(heatmapRadiusNum.value) !== heatmapState.brushRadius) heatmapRadiusNum.value = heatmapState.brushRadius.toFixed(1);
+      if (heatmapStatus) {
+        heatmapStatus.innerHTML = `CELL <b>K${sel.a} ← K${sel.b}</b> &nbsp; strength <b>${fmtSigned(sel.strength,3)}</b> &nbsp; radius <b>${sel.radius.toFixed(1)}px</b>`;
+      }
+      if (heatmapBrushStatus) {
+        const radiusWrite = heatmapState.writeRadius ? `radius <b>${heatmapState.brushRadius.toFixed(1)}px</b>` : '<b>radius unchanged</b>';
+        const mirror = (heatmapState.mirror || forceProxy.mirror) ? 'MIRROR ON' : 'mirror off';
+        heatmapBrushStatus.innerHTML = `BRUSH <b>${brushVerb()}</b> &nbsp; strength <b>${fmtSigned(signedBrush,3)}</b> &nbsp; ${radiusWrite} &nbsp; ${mirror}`;
+      }
+      syncHeatmapToolButtons();
+    }
+    function updateHeatmapGUI(){
+      heatmapVisibleCtrl?.updateDisplay();
+      heatmapToolCtrl?.updateDisplay();
+      heatmapBrushStrengthCtrl?.updateDisplay();
+      heatmapBrushRadiusCtrl?.updateDisplay();
+      heatmapWriteRadiusCtrl?.updateDisplay();
+      heatmapShowValuesCtrl?.updateDisplay();
+      heatmapMirrorCtrl?.updateDisplay();
+    }
+    function maxForceAbs(){ return Math.max(0.001, ...Array.from({length:kindCount*kindCount}, (_,i)=>Math.abs(fData[i*2+1]))); }
+    function maxForceRadius(){ return Math.max(1, ...Array.from({length:kindCount*kindCount}, (_,i)=>fData[i*2])); }
+    function strengthColor(strength){
+      const mag = Math.min(1, Math.abs(strength) / maxForceAbs());
+      if (strength > 0) {
+        return `linear-gradient(180deg, rgba(0,255,183,${0.18 + mag*0.62}), rgba(0,76,45,${0.35 + mag*0.45}))`;
+      }
+      if (strength < 0) {
+        return `linear-gradient(180deg, rgba(255,77,125,${0.18 + mag*0.62}), rgba(80,0,28,${0.35 + mag*0.45}))`;
+      }
+      return 'linear-gradient(180deg, rgba(55,95,60,.42), rgba(0,20,5,.74))';
+    }
+    function selectForcePair(a,b, sampleBrush=false){
+      forceProxy.pair = forcePairLabel(a,b);
+      refreshForceProxy();
+      if (sampleBrush) {
+        const v = cellValues(a,b);
+        heatmapState.brushRadius = v.radius;
+        heatmapState.brushStrength = Math.abs(v.strength);
+      }
+      updateHeatmapReadouts();
+      updateHeatmapGUI();
+      scheduleForceHeatmapDraw();
+    }
+    function applyHeatmapBrush(a,b){
+      selectForcePair(a,b, false);
+      if (heatmapState.tool === 'Inspect / sample') return;
+      const v = cellValues(a,b);
+      let radius = heatmapState.writeRadius ? heatmapState.brushRadius : v.radius;
+      let strength = v.strength;
+      if (heatmapState.tool === 'Paint attract') strength = Math.abs(heatmapState.brushStrength || 0);
+      else if (heatmapState.tool === 'Paint repel') strength = -Math.abs(heatmapState.brushStrength || 0);
+      else if (heatmapState.tool === 'Zero force') strength = 0;
+      setForce(a,b,radius,strength,heatmapState.mirror || forceProxy.mirror);
+      refreshForceProxy();
+      updateHeatmapReadouts();
+    }
+    function nudgeHeatmapCell(a,b,e){
+      e.preventDefault();
+      const dir = e.deltaY < 0 ? 1 : -1;
+      const v = cellValues(a,b);
+      let radius = v.radius;
+      let strength = v.strength;
+      if (e.shiftKey) {
+        const step = e.altKey ? 0.25 : (e.ctrlKey || e.metaKey ? 10 : 2);
+        radius = heatClamp(radius + dir * step, 0, 180);
+      } else {
+        const step = e.altKey ? 0.005 : (e.ctrlKey || e.metaKey ? 0.10 : 0.025);
+        strength = heatClamp(strength + dir * step, -2.5, 2.5);
+      }
+      setForce(a,b,radius,strength,heatmapState.mirror || forceProxy.mirror);
+      forceProxy.pair = forcePairLabel(a,b);
+      refreshForceProxy();
+      heatmapState.brushRadius = radius;
+      heatmapState.brushStrength = Math.abs(strength);
+      updateHeatmapReadouts();
+      updateHeatmapGUI();
+    }
+    function syncHeatmapPanelDisplay(){
+      if (!heatmapPanel) return;
+      heatmapPanel.style.display = heatmapState.visible ? 'block' : 'none';
+    }
+    function makeForceHeatmapPanel(){
+      heatmapPanel = document.createElement('div');
+      heatmapPanel.className = 'force-panel';
+      heatmapPanel.style.display = heatmapState.visible ? 'block' : 'none';
+      heatmapPanel.innerHTML = `
+        <div class="force-titlebar">
+          <strong>FORCE MATRIX // KIND INTERACTION EDITOR</strong>
+          <button type="button" data-close>hide</button>
+        </div>
+        <div class="force-help">
+          Rows are moving particles. Columns are source particles. Each cell always shows <b>strength</b> and <b>R radius</b>.
+          Positive strength attracts; negative strength repels. Mouse wheel over a cell nudges strength; Shift+wheel nudges radius.
+        </div>
+        <div class="force-status">
+          <div data-status></div>
+          <div data-brush-status></div>
+        </div>
+        <div class="force-toolbar">
+          <label class="full">Brush action
+            <div class="force-mode-row">
+              <button type="button" data-tool="Inspect / sample">inspect</button>
+              <button type="button" data-tool="Paint attract">attract +</button>
+              <button type="button" class="danger" data-tool="Paint repel">repel -</button>
+              <button type="button" class="warn" data-tool="Zero force">zero</button>
+            </div>
+          </label>
+          <label>Strength magnitude <output data-strength-out></output>
+            <div class="force-range-row">
+              <input data-strength type="range" min="0" max="2.5" step="0.001">
+              <input data-strength-num type="number" min="0" max="2.5" step="0.001">
+            </div>
+          </label>
+          <label>Interaction radius <output data-radius-out></output>
+            <div class="force-range-row">
+              <input data-radius type="range" min="0" max="180" step="0.01">
+              <input data-radius-num type="number" min="0" max="180" step="0.01">
+            </div>
+          </label>
+        </div>
+        <div class="force-checks">
+          <label><input data-write-radius type="checkbox" checked> painting also writes radius</label>
+          <label><input data-mirror type="checkbox"> mirror A↔B edits</label>
+          <label><input data-numbers type="checkbox" checked> show cell values</label>
+        </div>
+        <div class="force-grid-wrap"><div class="force-grid" data-grid></div></div>
+        <div class="force-legend">
+          <span class="chip"><span class="swatch" style="background:linear-gradient(90deg,#ff4d7d,#50001c)"></span>negative = repel</span>
+          <span class="chip"><span class="swatch" style="background:linear-gradient(90deg,#00ffb7,#004c2d)"></span>positive = attract</span>
+          <span>bottom bar = radius</span>
+          <span>wheel = strength · Shift+wheel = radius · Alt = fine · Ctrl = coarse</span>
+        </div>`;
+      document.body.appendChild(heatmapPanel);
+      heatmapGrid = heatmapPanel.querySelector('[data-grid]');
+      heatmapStatus = heatmapPanel.querySelector('[data-status]');
+      heatmapBrushStatus = heatmapPanel.querySelector('[data-brush-status]');
+      heatmapStrengthOut = heatmapPanel.querySelector('[data-strength-out]');
+      heatmapRadiusOut = heatmapPanel.querySelector('[data-radius-out]');
+      const strength = heatmapPanel.querySelector('[data-strength]');
+      const radius = heatmapPanel.querySelector('[data-radius]');
+      heatmapStrengthNum = heatmapPanel.querySelector('[data-strength-num]');
+      heatmapRadiusNum = heatmapPanel.querySelector('[data-radius-num]');
+      const writeRadius = heatmapPanel.querySelector('[data-write-radius]');
+      const mirror = heatmapPanel.querySelector('[data-mirror]');
+      const numbers = heatmapPanel.querySelector('[data-numbers]');
+      strength.value = heatmapState.brushStrength;
+      radius.value = heatmapState.brushRadius;
+      heatmapStrengthNum.value = heatmapState.brushStrength;
+      heatmapRadiusNum.value = heatmapState.brushRadius;
+      writeRadius.checked = heatmapState.writeRadius;
+      mirror.checked = heatmapState.mirror;
+      numbers.checked = heatmapState.showValues;
+      heatmapPanel.querySelector('[data-close]').addEventListener('click', () => { heatmapState.visible = false; syncHeatmapPanelDisplay(); heatmapVisibleCtrl?.updateDisplay(); });
+      heatmapPanel.querySelectorAll('[data-tool]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          heatmapState.tool = btn.dataset.tool;
+          updateHeatmapReadouts();
+          updateHeatmapGUI();
+        });
+      });
+      const setBrushStrength = v => {
+        heatmapState.brushStrength = heatClamp(Number(v) || 0, 0, 2.5);
+        strength.value = heatmapState.brushStrength;
+        updateHeatmapReadouts();
+        heatmapBrushStrengthCtrl?.updateDisplay();
+      };
+      const setBrushRadius = v => {
+        heatmapState.brushRadius = heatClamp(Number(v) || 0, 0, 180);
+        radius.value = heatmapState.brushRadius;
+        updateHeatmapReadouts();
+        heatmapBrushRadiusCtrl?.updateDisplay();
+      };
+      strength.addEventListener('input', e => setBrushStrength(e.target.value));
+      heatmapStrengthNum.addEventListener('input', e => setBrushStrength(e.target.value));
+      radius.addEventListener('input', e => setBrushRadius(e.target.value));
+      heatmapRadiusNum.addEventListener('input', e => setBrushRadius(e.target.value));
+      writeRadius.addEventListener('change', e => { heatmapState.writeRadius = e.target.checked; updateHeatmapReadouts(); heatmapWriteRadiusCtrl?.updateDisplay(); });
+      mirror.addEventListener('change', e => { heatmapState.mirror = e.target.checked; forceProxy.mirror = e.target.checked; forceMirrorCtrl.updateDisplay(); updateHeatmapReadouts(); heatmapMirrorCtrl?.updateDisplay(); });
+      numbers.addEventListener('change', e => { heatmapState.showValues = e.target.checked; drawForceHeatmap(); heatmapShowValuesCtrl?.updateDisplay(); });
+      heatmapPanel.addEventListener('pointerleave', () => { heatmapPainting = false; });
+      window.addEventListener('pointerup', () => { heatmapPainting = false; });
+      const titlebar = heatmapPanel.querySelector('.force-titlebar');
+      let drag = null;
+      titlebar.addEventListener('pointerdown', e => {
+        if (e.target.closest('button')) return;
+        const r = heatmapPanel.getBoundingClientRect();
+        drag = { dx:e.clientX-r.left, dy:e.clientY-r.top };
+        titlebar.setPointerCapture(e.pointerId);
+      });
+      titlebar.addEventListener('pointermove', e => {
+        if (!drag) return;
+        heatmapPanel.style.left = `${Math.max(8, Math.min(innerWidth-80, e.clientX-drag.dx))}px`;
+        heatmapPanel.style.top = `${Math.max(8, Math.min(innerHeight-60, e.clientY-drag.dy))}px`;
+        heatmapPanel.style.bottom = 'auto';
+      });
+      titlebar.addEventListener('pointerup', () => { drag = null; });
+      updateHeatmapReadouts();
+      drawForceHeatmap();
+    }
+    drawForceHeatmap = function(){
+      if (!heatmapGrid) return;
+      heatmapGrid.style.gridTemplateColumns = `54px repeat(${kindCount}, 76px)`;
+      heatmapGrid.innerHTML = '';
+      const corner = document.createElement('div');
+      corner.className = 'force-label force-corner';
+      corner.textContent = 'move\\src';
+      corner.title = 'row = moving / affected kind, column = source / neighbor kind';
+      heatmapGrid.appendChild(corner);
+      for (let b = 0; b < kindCount; ++b) {
+        const lab = document.createElement('div');
+        lab.className = 'force-label';
+        lab.textContent = `SRC ${b}`;
+        heatmapGrid.appendChild(lab);
+      }
+      const [selA, selB] = selectedForcePair();
+      const maxRadius = maxForceRadius();
+      for (let a = 0; a < kindCount; ++a) {
+        const row = document.createElement('div');
+        row.className = 'force-label';
+        row.textContent = `KIND ${a}`;
+        heatmapGrid.appendChild(row);
+        for (let b = 0; b < kindCount; ++b) {
+          const {radius, strength} = cellValues(a,b);
+          const cell = document.createElement('div');
+          const signClass = strength > 0 ? 'positive' : (strength < 0 ? 'negative' : 'zero');
+          cell.className = `force-cell ${signClass}` + (a === selA && b === selB ? ' selected' : '');
+          cell.style.background = strengthColor(strength);
+          cell.style.setProperty('--radius-frac', Math.max(0.02, Math.min(1, radius / maxRadius)).toFixed(3));
+          cell.title = `moving kind ${a} affected by source kind ${b}\nstrength: ${fmtSigned(strength,3)}\nradius: ${radius.toFixed(2)} px\nwheel: nudge strength\nShift+wheel: nudge radius`;
+          if (heatmapState.showValues) {
+            cell.innerHTML = `<div class="force-cell-strength">${fmtSigned(strength,2)}</div><div class="force-cell-radius">R ${radius.toFixed(0)}</div>`;
+          } else {
+            cell.innerHTML = `<div class="force-cell-mini">${strength > 0 ? 'ATTRACT' : strength < 0 ? 'REPEL' : 'ZERO'}</div>`;
+          }
+          cell.addEventListener('pointerdown', e => {
+            e.preventDefault();
+            if (heatmapState.tool === 'Inspect / sample' || e.altKey) {
+              selectForcePair(a,b,true);
+              return;
+            }
+            heatmapPainting = true;
+            applyHeatmapBrush(a,b);
+          });
+          cell.addEventListener('pointerenter', () => { if (heatmapPainting) applyHeatmapBrush(a,b); else { selectForcePair(a,b,false); } });
+          cell.addEventListener('wheel', e => nudgeHeatmapCell(a,b,e), { passive:false });
+          heatmapGrid.appendChild(cell);
+        }
+      }
+      updateHeatmapReadouts();
+    };
+
+    let heatmapVisibleCtrl, heatmapToolCtrl, heatmapBrushStrengthCtrl, heatmapBrushRadiusCtrl, heatmapWriteRadiusCtrl, heatmapShowValuesCtrl, heatmapMirrorCtrl;
+
+    const forceActions = {
+      randomize () { forceProxy.preset = 'Random'; applyForcePreset('Random'); refreshForceProxy(); updateHeatmapReadouts(); },
+      sand () { forceProxy.preset = 'Sand'; applyForcePreset('Sand'); refreshForceProxy(); updateHeatmapReadouts(); },
+      symmetrize () { symmetrizeForces(); refreshForceProxy(); updateHeatmapReadouts(); },
+      invert () { invertForces(); refreshForceProxy(); updateHeatmapReadouts(); },
+      zero () { zeroForceStrengths(); refreshForceProxy(); updateHeatmapReadouts(); }
+    };
+    interactionGUI.add(forceActions, 'randomize').name('🎲 Randomize matrix');
+    interactionGUI.add(forceActions, 'sand').name('Neutral / sand');
+    interactionGUI.add(forceActions, 'symmetrize').name('Make symmetric');
+    interactionGUI.add(forceActions, 'invert').name('Invert attract↔repel');
+    interactionGUI.add(forceActions, 'zero').name('Zero strengths');
+
+    const heatmapGUI = interactionGUI.addFolder('Heatmap editor');
+    heatmapVisibleCtrl = heatmapGUI.add(heatmapState, 'visible').name('Show heatmap').onChange(syncHeatmapPanelDisplay);
+    heatmapToolCtrl = heatmapGUI.add(heatmapState, 'tool', HEATMAP_TOOLS).name('Brush action').onChange(() => { updateHeatmapReadouts(); });
+    heatmapBrushStrengthCtrl = heatmapGUI.add(heatmapState, 'brushStrength', 0, 2.5, 0.001).name('Brush magnitude').onChange(() => updateHeatmapReadouts());
+    heatmapBrushRadiusCtrl = heatmapGUI.add(heatmapState, 'brushRadius', 0, 180, 0.01).name('Brush radius').onChange(() => updateHeatmapReadouts());
+    heatmapWriteRadiusCtrl = heatmapGUI.add(heatmapState, 'writeRadius').name('Paint radius too').onChange(() => updateHeatmapReadouts());
+    heatmapMirrorCtrl = heatmapGUI.add(heatmapState, 'mirror').name('Mirror A↔B').onChange(v => { forceProxy.mirror = v; forceMirrorCtrl.updateDisplay(); updateHeatmapReadouts(); });
+    heatmapShowValuesCtrl = heatmapGUI.add(heatmapState, 'showValues').name('Show cell values').onChange(drawForceHeatmap);
+    heatmapGUI.add({ refresh(){ drawForceHeatmap(); }}, 'refresh').name('Refresh heatmap');
+    makeForceHeatmapPanel();
+
+    const visualGUI = runtimeGUI.addFolder('Visuals');
+    const renderOps = {
+      clearTrails(){ clearTrailHistory(); },
+      crisp(){ renderParams.trails = false; renderParams.glow = false; updateCanvasGlow(); visualCtrls.forEach(c => c.updateDisplay()); },
+      dreamy(){ renderParams.trails = true; renderParams.trailFade = 0.965; renderParams.trailParticleGain = 0.36; renderParams.glow = true; updateCanvasGlow(); clearTrailHistory(); visualCtrls.forEach(c => c.updateDisplay()); }
+    };
+    const visualCtrls = [];
+    visualCtrls.push(visualGUI.add(renderParams, 'trails').name('Trails / persistence').onChange(v => { if (v) clearTrailHistory(); }));
+    visualCtrls.push(visualGUI.add(renderParams, 'trailFade', 0.80, 0.995, 0.001).name('Trail length'));
+    visualCtrls.push(visualGUI.add(renderParams, 'trailParticleGain', 0.02, 2.0, 0.01).name('Trail particle gain'));
+    visualCtrls.push(visualGUI.add(renderParams, 'trailOutputGain', 0.1, 4.0, 0.01).name('Trail output gain'));
+    visualCtrls.push(visualGUI.add(renderParams, 'pointBrightness', 0.05, 4.0, 0.01).name('Crisp brightness'));
+    visualCtrls.push(visualGUI.add(renderParams, 'glow').name('CSS glow').onChange(updateCanvasGlow));
+    visualCtrls.push(visualGUI.add(renderParams, 'glowBlur', 0, 2.5, 0.01).name('Glow blur').onChange(updateCanvasGlow));
+    visualCtrls.push(visualGUI.add(renderParams, 'glowBrightness', 0.5, 3, 0.01).name('Glow brightness').onChange(updateCanvasGlow));
+    visualCtrls.push(visualGUI.add(renderParams, 'glowSaturation', 0.5, 3, 0.01).name('Glow saturation').onChange(updateCanvasGlow));
+    visualGUI.add(renderOps, 'clearTrails').name('Clear trail buffer');
+    visualGUI.add(renderOps, 'crisp').name('Crisp mode');
+    visualGUI.add(renderOps, 'dreamy').name('Dreamy trails');
+    updateCanvasGlow();
+
+    const particleGUI = runtimeGUI.addFolder('Particle reset');
+    particleGUI.add(particleOps, 'spawnSpeed', 0, 50, 0.01).name('Respawn speed');
+    particleGUI.add(particleOps, 'kindLayout', ['Random','Index bands','Horizontal bands','Radial wedges','Concentric rings']).name('Kind layout');
+    particleGUI.add(particleOps, 'resetParticles').name('Respawn now');
+
+    const beaconGlobalGUI = runtimeGUI.addFolder('Beacon globals');
+    beaconGlobalGUI.add(simParams, 'C', 1, 500, 0.0001).name('Wave speed');
+    beaconGlobalGUI.add(simParams, 'beaconScale', 0, 5, 0.001).name('Beacon amp scale');
+
+    const boundaryGUI = runtimeGUI.addFolder('Boundary');
+    boundaryGUI.add(boundary,'sides',3,128,1).name('Sides (128≈circle)').onChange(v => { boundary.sides = Math.round(v); drawOverlay(); });
+    boundaryGUI.add(boundary,'radius',32,Math.min(domain.w,domain.h)*0.5,1).name('Radius').onChange(drawOverlay);
+    boundaryGUI.add(boundary,'rotation',-Math.PI,Math.PI,0.001).name('Rotation').onChange(drawOverlay);
+    boundaryGUI.add(boundary,'bounce',0,1.2,0.01).name('Wall bounce');
+    /********************  SECTION 1D ─ FILE I/O *************************
+     * Remove this block if you don’t need browser save/export.
+     ********************************************************************/
+    const fileOps={
+      save(){
+        const blob={
+          particleCount,kindCount,preset,simParams,renderParams,boundary,
+          forces:Array.from(fData),beaconCount,
+          beacons:Array.from(beaconArr.slice(0,beaconCount*B_STRIDE)),
+          waves   : Array.from(waveArr)
+        };
+        localStorage.setItem('particleSimSave',JSON.stringify(blob));
+        alert('Saved to browser cache.');
+      },
+      async exportJSON(){
+        const raw=localStorage.getItem('particleSimSave');
+        if(!raw){alert('Nothing saved yet.');return;}
+        const data=JSON.parse(raw);
+        data._doc = {                    
+          particleCount : 'Total number of particles in the simulation.',
+          kindCount     : 'Number of distinct particle kinds / colours.',
+          preset        : '"Random" = random attraction table, "Sand" = zero attraction.',
+          simParams     : {
+            dt        : 'Simulation time-step.',
+            friction  : 'Velocity damping factor per step.',
+            C           : 'Beacon wave propagation speed.',
+            forceScale  : 'Global multiplier for all particle-particle strengths.',
+            radiusScale : 'Global multiplier for all particle-particle interaction radii.',
+            beaconScale : 'Global multiplier for all beacon amplitudes.',
+            speedLimit  : 'Velocity clamp; 0 disables clamping.'
+          },
+          renderParams  : 'Visual mode controls: trails, trailFade, brightness/gain, and toggleable CSS glow.',
+          boundary      : 'Regular n-sided polygon: { sides, radius, rotation, bounce }. Use sides=128 for a circle-like boundary.',
+          forces        : '[radius, strength] pairs for every kind × kind interaction.',
+          beaconCount   : 'Number of active beacons in `beacons[]`.',
+          beacons       : 'Flattened array of beacons: [x, y, freq, amp, decay, phase, grid, useWave] …',
+          waves         : `Waveform samples per beacon (${WAVE_LEN} each)`
+        };
+        const json=JSON.stringify(data,null,2);
+        try{await navigator.clipboard.writeText(json);
+            alert('Save copied to clipboard 👍');}
+        catch{console.log(json); alert('Clipboard failed – see console.');}
+      }
+    };
+    runtimeGUI.add(fileOps,'save').name('💾 Save');
+    runtimeGUI.add(fileOps,'exportJSON').name('📋 Export');
+
+    /********************  SECTION 1E ─ SIM LOOP *************************/
+    const ctx=canvas.getContext('webgpu');
+    ctx.configure({device,format:presentationFormat, alphaMode:'opaque'});
+    const renderUBuf=device.createBuffer({size:16, usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+    const renderBG=device.createBindGroup({layout:renderUBGLayout,
+      entries:[{binding:0,resource:{buffer:renderUBuf}}]});
+    const fadeUBuf=device.createBuffer({size:16, usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+    const presentUBuf=device.createBuffer({size:16, usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+    const screenSampler=device.createSampler({magFilter:'linear', minFilter:'linear'});
+    function makeTrailTexture(){
+      return device.createTexture({
+        size:[domain.w, domain.h], format:presentationFormat,
+        usage:GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST
+      });
+    }
+    const trailTextures=[makeTrailTexture(), makeTrailTexture()];
+    const trailViews=trailTextures.map(t => t.createView());
+    const screenBGs = { fade:[], present:[] };
+    for (let i = 0; i < 2; ++i) {
+      screenBGs.fade[i] = device.createBindGroup({layout:screenBGLayout, entries:[
+        {binding:0,resource:trailViews[i]}, {binding:1,resource:screenSampler}, {binding:2,resource:{buffer:fadeUBuf}}
+      ]});
+      screenBGs.present[i] = device.createBindGroup({layout:screenBGLayout, entries:[
+        {binding:0,resource:trailViews[i]}, {binding:1,resource:screenSampler}, {binding:2,resource:{buffer:presentUBuf}}
+      ]});
+    }
+    function clearTrailHistory(){
+      const enc=device.createCommandEncoder();
+      for (const view of trailViews) {
+        const pass=enc.beginRenderPass({colorAttachments:[{view,loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:1}}]});
+        pass.end();
+      }
+      queue.submit([enc.finish()]);
+      trailReadIndex = 0;
+    }
+    function updateCanvasGlow(){
+      canvas.style.filter = renderParams.glow
+        ? `blur(${renderParams.glowBlur}px) brightness(${renderParams.glowBrightness}) saturate(${renderParams.glowSaturation})`
+        : 'none';
+    }
+    const compBG_A=device.createBindGroup({layout:cBGLayout,
+      entries:[{binding:0,resource:{buffer:bufA}},
+               {binding:1,resource:{buffer:bufB}},
+               {binding:2,resource:{buffer:fBuf}}]});
+    const compBG_B=device.createBindGroup({layout:cBGLayout,
+      entries:[{binding:0,resource:{buffer:bufB}},
+               {binding:1,resource:{buffer:bufA}},
+               {binding:2,resource:{buffer:fBuf}}]});
+    const simBG=device.createBindGroup({layout:uBGLayout,
+      entries:[{binding:0,resource:{buffer:uBuf}}]});
+    const beaconBG=device.createBindGroup({layout:bBGLayout,
+      entries:[{binding:0,resource:{buffer:beaconBuf}}]});
+    const waveBG = device.createBindGroup({layout:waveBGLayout,
+      entries:[{binding:0,resource:{buffer:waveBuf}}]});
+    const rBG_A=device.createBindGroup({layout:rBGLayout,
+      entries:[{binding:0,resource:{buffer:bufA}}]});
+    const rBG_B=device.createBindGroup({layout:rBGLayout,
+      entries:[{binding:0,resource:{buffer:bufB}}]});
+
+    let flip=false;
+    let trailReadIndex=0;
+    clearTrailHistory();
+    function frame(){
+      pumpLiveAudioWaves();
+      simTime+=simParams.dt; updUniform(beaconCount);
+      queue.writeBuffer(renderUBuf,0,new Float32Array([
+        renderParams.trails ? renderParams.trailParticleGain : renderParams.pointBrightness,0,0,0
+      ]));
+      queue.writeBuffer(fadeUBuf,0,new Float32Array([renderParams.trailFade,0,0,0]));
+      queue.writeBuffer(presentUBuf,0,new Float32Array([renderParams.trailOutputGain,0,0,0]));
+      const enc=device.createCommandEncoder();
+
+      const cp=enc.beginComputePass();
+      cp.setPipeline(compPipe);
+      cp.setBindGroup(0,flip?compBG_B:compBG_A);
+      cp.setBindGroup(1,simBG);
+      cp.setBindGroup(2,beaconBG);
+      cp.setBindGroup(3,waveBG);
+      cp.dispatchWorkgroups(Math.ceil(particleCount/256));
+      cp.end();
+
+      const particleBG = flip ? rBG_A : rBG_B;
+      if (renderParams.trails) {
+        const src = trailReadIndex;
+        const dst = 1 - src;
+        const fadePass=enc.beginRenderPass({colorAttachments:[{
+          view:trailViews[dst], loadOp:'clear', storeOp:'store', clearValue:{r:0,g:0,b:0,a:1}}]});
+        fadePass.setPipeline(screenPipe);
+        fadePass.setBindGroup(0,screenBGs.fade[src]);
+        fadePass.draw(3);
+        fadePass.end();
+
+        const trailPass=enc.beginRenderPass({colorAttachments:[{
+          view:trailViews[dst], loadOp:'load', storeOp:'store'}]});
+        trailPass.setPipeline(rPipeAdd);
+        trailPass.setBindGroup(0,particleBG);
+        trailPass.setBindGroup(1,renderBG);
+        trailPass.draw(particleCount);
+        trailPass.end();
+
+        const presentPass=enc.beginRenderPass({colorAttachments:[{
+          view:ctx.getCurrentTexture().createView(), loadOp:'clear', storeOp:'store', clearValue:{r:0,g:0,b:0,a:1}}]});
+        presentPass.setPipeline(screenPipe);
+        presentPass.setBindGroup(0,screenBGs.present[dst]);
+        presentPass.draw(3);
+        presentPass.end();
+        trailReadIndex = dst;
+      } else {
+        const rp=enc.beginRenderPass({colorAttachments:[{
+          view:ctx.getCurrentTexture().createView(),
+          loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:1}}]});
+        rp.setPipeline(rPipe);
+        rp.setBindGroup(0,particleBG);
+        rp.setBindGroup(1,renderBG);
+        rp.draw(particleCount); rp.end();
+      }
+
+      queue.submit([enc.finish()]);
+      drawOverlay();
+      flip=!flip; requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+    /* ****************************************************************** */
+  } //  ← end startSim
+  </script>
+</body>
+</html>
