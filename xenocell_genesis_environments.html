@@ -1,0 +1,1168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>XenoCell Genesis — Particle-Cell Evolution Prototype</title>
+  <style>
+    :root{
+      --bg:#020504; --panel:#06100cdd; --panel2:#04140f; --grid:#174130;
+      --green:#74ff9c; --cyan:#6ffcff; --amber:#ffd36f; --mag:#ff4fd8; --red:#ff5968;
+      --text:#d7ffe6; --muted:#7fae94;
+    }
+    html,body{height:100%;margin:0;background:radial-gradient(circle at 50% 35%, #07190f, #010302 70%); color:var(--text); overflow:hidden; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;}
+    canvas{display:block; touch-action:none;}
+    #world{position:fixed; inset:0; width:100vw; height:100dvh; image-rendering:auto;}
+    .scan::after{content:"";position:fixed;inset:0;pointer-events:none;background:linear-gradient(rgba(255,255,255,.035) 50%, rgba(0,0,0,.035) 50%);background-size:100% 4px;mix-blend-mode:overlay;opacity:.55;}
+    .panel{position:fixed; background:linear-gradient(180deg, #06140fe8, #020805f2); border:1px solid #2cff8c88; box-shadow:0 0 22px #00ff8a24, inset 0 0 16px #00ff7a12; backdrop-filter:blur(6px);}
+    #hud{left:14px; top:14px; width:336px; padding:12px 12px 10px; z-index:5;}
+    #lab{right:14px; top:14px; width:348px; max-height:calc(100dvh - 28px); overflow:auto; padding:12px; z-index:5;}
+    #matrixDock{left:14px; bottom:14px; width:336px; padding:10px 12px 12px; z-index:5;}
+    #cards{position:fixed; left:374px; right:386px; bottom:14px; height:118px; display:flex; gap:8px; z-index:4; pointer-events:auto;}
+    .title{color:var(--green); letter-spacing:.13em; font-weight:800; font-size:14px; text-transform:uppercase; margin-bottom:8px; text-shadow:0 0 8px #00ff80aa;}
+    .sub{font-size:11px;color:var(--muted); line-height:1.35;}
+    .row{display:flex; align-items:center; justify-content:space-between; gap:8px; margin:7px 0;}
+    .row label{font-size:12px;color:#bfffd4;}
+    .readouts{display:grid; grid-template-columns:repeat(3,1fr); gap:5px; margin:8px 0 6px;}
+    .metric{border:1px solid #1f6c49; background:#03110b; padding:6px 6px 5px; min-height:32px;}
+    .metric b{display:block; color:var(--cyan); font-size:15px; font-weight:800; line-height:1.1;}
+    .metric span{display:block; color:#84b99b; font-size:9px; text-transform:uppercase; letter-spacing:.08em; margin-top:3px;}
+    button,select,input[type="number"],input[type="text"]{font:inherit; color:var(--text); background:#04110b; border:1px solid #2cff8c80; padding:6px 8px; outline:none; box-shadow:inset 0 0 10px #00ff7a12;}
+    button{cursor:pointer; text-transform:uppercase; letter-spacing:.06em; font-size:11px;}
+    button:hover{background:#092317; box-shadow:0 0 12px #00ff8055, inset 0 0 12px #00ff8030;}
+    button.active{background:#0a2e1e; border-color:var(--cyan); color:var(--cyan); box-shadow:0 0 18px #00faff55, inset 0 0 14px #00faff25;}
+    .btnGrid{display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin:8px 0;}
+    select{width:100%;}
+    input[type="range"]{width:164px; accent-color:#4cff90;}
+    .value{color:var(--amber); min-width:54px; text-align:right; font-size:12px;}
+    details{border-top:1px dashed #1f6c49; padding-top:8px; margin-top:8px;}
+    summary{cursor:pointer; color:var(--cyan); text-transform:uppercase; font-size:12px; letter-spacing:.08em;}
+    .tiny{font-size:10px;color:#86bda0;}
+    #shipLine{border:1px solid #214d39; background:#021008; color:#baffcd; padding:7px; min-height:30px; font-size:11px; line-height:1.35; margin-top:7px;}
+    #matrix{width:216px;height:216px;border:1px solid #2cff8c88;background:#020805; image-rendering:pixelated;}
+    #matrixWrap{display:flex; gap:10px; align-items:flex-start;}
+    #matrixInfo{font-size:11px; color:#bfffd4; line-height:1.45; flex:1; min-height:178px;}
+    .card{flex:1; min-width:92px; border:1px solid #1d5d42; background:#04100bd8; padding:7px; box-shadow:inset 0 0 10px #00ff6011; cursor:pointer; overflow:hidden;}
+    .card:hover,.card.sel{border-color:var(--cyan); box-shadow:0 0 12px #00ffff44, inset 0 0 10px #00ffff18;}
+    .cardName{font-size:11px;color:var(--green); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+    .bar{height:5px;background:#092417; margin:5px 0; overflow:hidden; border:1px solid #174130;}
+    .bar > i{display:block; height:100%; background:linear-gradient(90deg,var(--green),var(--cyan));}
+    .pill{display:inline-block; border:1px solid #236146; color:#a9ffc4; padding:1px 5px; margin:1px 2px 1px 0; font-size:9px;}
+    .meterList{display:grid; grid-template-columns:1fr 1fr; gap:4px 8px; margin:6px 0;}
+    .meterRow{font-size:10px; color:#bfffd4;}
+    .meterName{display:flex; justify-content:space-between; gap:5px; white-space:nowrap;}
+    .meterTrack{height:5px; background:#061b12; border:1px solid #174130; position:relative; overflow:hidden;}
+    .meterTrack::before{content:""; position:absolute; left:50%; top:0; bottom:0; width:1px; background:#2cff8c66;}
+    .meterFill{display:block; height:100%; width:0%; background:linear-gradient(90deg,#ff4fd8,#ffd36f,#74ff9c,#6ffcff);}
+    #brainView{width:100%; height:170px; border:1px solid #1f6c49; background:#010604; display:block; margin:7px 0; image-rendering:auto;}
+    .geneLine{font-size:10px; color:#9fdcb4; border-top:1px dotted #174130; padding:2px 0;}
+    .geneLine b{color:#ffd36f;}
+    .legendRow{display:flex; flex-wrap:wrap; gap:5px; margin:5px 0;}
+    .warning{color:var(--amber);}
+    .danger{color:var(--red);}
+    .hidden{display:none!important;}
+    @media(max-width:900px){
+      #lab{right:8px; left:8px; top:auto; bottom:8px; width:auto; max-height:42dvh;}
+      #hud{left:8px; top:8px; width:calc(100vw - 40px);}
+      #matrixDock{display:none;}
+      #cards{display:none;}
+    }
+  </style>
+</head>
+<body class="scan">
+<canvas id="world"></canvas>
+<section id="hud" class="panel">
+  <div class="title">XENOCELL :: GENESIS V0</div>
+  <div class="readouts">
+    <div class="metric"><b id="rGen">0</b><span>generation</span></div>
+    <div class="metric"><b id="rStep">0</b><span>step</span></div>
+    <div class="metric"><b id="rAlive">0</b><span>alive</span></div>
+    <div class="metric"><b id="rBest">0.00</b><span>best score</span></div>
+    <div class="metric"><b id="rAvg">0.00</b><span>avg score</span></div>
+    <div class="metric"><b id="rDiv">0.00</b><span>diversity</span></div>
+  </div>
+  <div class="btnGrid">
+    <button id="bPause">pause</button>
+    <button id="bNext">next gen</button>
+    <button id="bReset">reset</button>
+    <button id="bSeed">seeded</button>
+    <button id="bExport">export</button>
+    <button id="bHelp">hints</button>
+  </div>
+  <div id="shipLine">Booting wet-lab telemetry...</div>
+</section>
+
+<section id="lab" class="panel">
+  <div class="title">EVOLUTION CHAMBER</div>
+  <div class="row"><label>Arena</label><select id="arenaSel">
+    <option value="core">Reach Core Garden</option>
+    <option value="glyphs">Visit Glyph Sequence</option>
+    <option value="maze">Food Labyrinth</option>
+    <option value="toxic">Toxic Spiral</option>
+    <option value="gate">Moving Gate Gauntlet</option>
+    <option value="wheel">Rotating Hazard Wheel</option>
+    <option value="forage">Sparse Forager Desert</option>
+    <option value="trap">Baited Core Trap</option>
+    <option value="relay">Signal Relay Corridor</option>
+  </select></div>
+  <div class="row"><label>Population</label><input id="pop" type="range" min="6" max="48" step="1"><span id="popV" class="value"></span></div>
+  <div class="row"><label>Particles / cell</label><input id="ppc" type="range" min="6" max="28" step="2"><span id="ppcV" class="value"></span></div>
+  <div class="row"><label>Steps / generation</label><input id="stepsGen" type="range" min="180" max="1800" step="60"><span id="stepsGenV" class="value"></span></div>
+  <div class="row"><label>Speed</label><input id="speed" type="range" min="1" max="8" step="1"><span id="speedV" class="value"></span></div>
+  <div class="row"><label>Mutation rate</label><input id="mut" type="range" min="0" max="0.30" step="0.005"><span id="mutV" class="value"></span></div>
+  <div class="row"><label>Selection fraction</label><input id="selFrac" type="range" min="0.05" max="0.60" step="0.01"><span id="selFracV" class="value"></span></div>
+  <div class="row"><label>Sexual crossover</label><button id="crossBtn">on</button></div>
+  <div class="row"><label>Warm-start brains</label><button id="warmBtn">on</button></div>
+  <details open>
+    <summary>View</summary>
+    <div class="row"><label>Particles</label><button id="showParticles">on</button></div>
+    <div class="row"><label>Cell membranes</label><button id="showCells">on</button></div>
+    <div class="row"><label>Body skeleton</label><button id="showSkeleton">on</button></div>
+    <div class="row"><label>Pheromone fog</label><button id="showSignals">on</button></div>
+    <div class="row"><label>Trails</label><button id="showTrails">off</button></div>
+  </details>
+  <details open>
+    <summary>Selected organism telemetry</summary>
+    <div class="sub">The body brain reads normalized sensors, runs weighted genes through eight recurrent neurons, then writes motor/action values that push particle-cell bodies.</div>
+    <canvas id="brainView" width="330" height="170"></canvas>
+    <div class="legendRow tiny"><span style="color:#ffd36f">target</span><span style="color:#6ffcff">food</span><span style="color:#ff5968">hazard</span><span style="color:#ff4fd8">wall</span><span style="color:#74ff9c">motor</span></div>
+    <div class="tiny">Top live sensors</div><div id="sensorList" class="meterList"></div>
+    <div class="tiny">Live actions / motors</div><div id="actionList" class="meterList"></div>
+    <div class="tiny">Strongest active genes this frame</div><div id="geneList"></div>
+  </details>
+  <details>
+    <summary>Premise</summary>
+    <div class="sub">
+      Each genome owns a block-structured force matrix. Diagonal blocks describe particle mixtures that tend to become cells. Off-diagonal blocks and body springs weakly bind cells into bodies. A biosim-style sensor→neuron→action genome steers the body; arenas select survivors.
+    </div>
+  </details>
+</section>
+
+<section id="matrixDock" class="panel">
+  <div class="title">CHAMPION CHEMISTRY MATRIX</div>
+  <div id="matrixWrap">
+    <canvas id="matrix" width="216" height="216"></canvas>
+    <div id="matrixInfo">Hover a cell. Wheel = strength, Shift+wheel = radius. Blocks are cell-type domains; bright cyan attracts, magenta repels.</div>
+  </div>
+</section>
+
+<section id="cards"></section>
+
+<script>
+(()=>{
+'use strict';
+
+const canvas = document.getElementById('world');
+const ctx = canvas.getContext('2d', { alpha:false });
+const mCanvas = document.getElementById('matrix');
+const mctx = mCanvas.getContext('2d');
+const brainCanvas = document.getElementById('brainView');
+const bctx = brainCanvas.getContext('2d');
+
+const WORLD = { w: 1024, h: 640 };
+const ROLE_NAMES = ['mem','core','motor'];
+const CELL_NAMES = ['α','β','γ'];
+const ROLES_PER_CELL = 3;
+const CELL_TYPES = 3;
+const KIND_COUNT = CELL_TYPES * ROLES_PER_CELL;
+const MAX_NEURONS = 8;
+const SENSOR_NAMES = [
+  'loc-x','loc-y','target-x','target-y','food-x','food-y','hazard-x','hazard-y',
+  'energy','integrity','age','osc-sin','osc-cos','signal','signal-x','signal-y',
+  'crowd-x','crowd-y','vel-x','vel-y','random',
+  'wall-x','wall-y','boundary-x','boundary-y'
+];
+const ACTION_NAMES = ['move-x','move-y','cohere','expand','emit-signal','eat-bias','turn','pulse'];
+const SIGW = 96, SIGH = 60;
+const TAU = Math.PI * 2;
+const EPS = 1e-6;
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+const rand=(a=1,b=0)=>b+Math.random()*(a-b);
+const randi=(n)=>Math.floor(Math.random()*n);
+const choice=a=>a[randi(a.length)];
+const gauss=()=>{let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(TAU*v);};
+const sigmoid=x=>1/(1+Math.exp(-x));
+const idx=(a,b)=>a*KIND_COUNT+b;
+const roleName=k=>`${CELL_NAMES[Math.floor(k/ROLES_PER_CELL)]}.${ROLE_NAMES[k%ROLES_PER_CELL]}`;
+
+let settings = {
+  population: 24,
+  particlesPerCell: 14,
+  stepsPerGeneration: 720,
+  speed: 3,
+  mutationRate: 0.075,
+  selectionFrac: 0.22,
+  crossover: true,
+  warmStart: true,
+  showParticles: true,
+  showCells: true,
+  showSkeleton: true,
+  showSignals: true,
+  showTrails: false,
+  hints: true,
+  arena: 'core'
+};
+
+let organisms = [];
+let particles = [];
+let generation = 0;
+let simStep = 0;
+let paused = false;
+let arena = null;
+let signal = new Float32Array(SIGW*SIGH);
+let selectedOrgId = -1;
+let championGenome = null;
+let topSnapshot = [];
+let lastBest = 0, lastAvg = 0, lastDiversity = 0;
+let mx = -9999, my = -9999;
+let hoverMatrix = null;
+let rafLast = performance.now();
+let time = 0;
+
+function resize(){
+  const dpr = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
+  canvas.width = Math.floor(innerWidth * dpr);
+  canvas.height = Math.floor(innerHeight * dpr);
+  ctx.setTransform(canvas.width/WORLD.w,0,0,canvas.height/WORLD.h,0,0);
+}
+window.addEventListener('resize', resize); resize();
+
+function bindRange(id, key, fmt=(v)=>v){
+  const el=document.getElementById(id), val=document.getElementById(id+'V');
+  el.value = settings[key];
+  const upd=()=>{ settings[key] = Number(el.value); val.textContent = fmt(settings[key]); };
+  el.addEventListener('input', upd); upd();
+}
+function toggleBtn(id,key,onText='on',offText='off'){
+  const b=document.getElementById(id);
+  const render=()=>{ b.textContent=settings[key]?onText:offText; b.classList.toggle('active',!!settings[key]); };
+  b.addEventListener('click',()=>{settings[key]=!settings[key]; render();}); render();
+}
+bindRange('pop','population',v=>v|0);
+bindRange('ppc','particlesPerCell',v=>v|0);
+bindRange('stepsGen','stepsPerGeneration',v=>v|0);
+bindRange('speed','speed',v=>`${v|0}x`);
+bindRange('mut','mutationRate',v=>v.toFixed(3));
+bindRange('selFrac','selectionFrac',v=>v.toFixed(2));
+toggleBtn('crossBtn','crossover');
+toggleBtn('warmBtn','warmStart');
+toggleBtn('showParticles','showParticles');
+toggleBtn('showCells','showCells');
+toggleBtn('showSkeleton','showSkeleton');
+toggleBtn('showSignals','showSignals');
+toggleBtn('showTrails','showTrails');
+
+document.getElementById('bPause').onclick=()=>{paused=!paused; document.getElementById('bPause').textContent=paused?'resume':'pause';};
+document.getElementById('bNext').onclick=()=>endGeneration();
+document.getElementById('bReset').onclick=()=>resetPopulation(false);
+document.getElementById('bSeed').onclick=()=>resetPopulation(true);
+document.getElementById('bHelp').onclick=()=>{settings.hints=!settings.hints;};
+document.getElementById('arenaSel').onchange=e=>{settings.arena=e.target.value; resetPopulation(settings.warmStart);};
+document.getElementById('bExport').onclick=exportChampion;
+
+canvas.addEventListener('pointermove', e=>{
+  const r=canvas.getBoundingClientRect(); mx=(e.clientX-r.left)/r.width*WORLD.w; my=(e.clientY-r.top)/r.height*WORLD.h;
+});
+canvas.addEventListener('pointerleave',()=>{mx=my=-9999;});
+canvas.addEventListener('pointerdown', e=>{
+  const r=canvas.getBoundingClientRect(); const x=(e.clientX-r.left)/r.width*WORLD.w, y=(e.clientY-r.top)/r.height*WORLD.h;
+  let best=-1,bestD=1e9;
+  for(const o of organisms){ const d=(o.x-x)**2+(o.y-y)**2; if(d<bestD){bestD=d;best=o.id;} }
+  if(bestD<60*60){ selectedOrgId=best; renderCards(); drawMatrix(); }
+});
+window.addEventListener('keydown', e=>{
+  if(e.code==='Space'){ e.preventDefault(); paused=!paused; document.getElementById('bPause').textContent=paused?'resume':'pause'; }
+  if(e.key==='r'||e.key==='R') resetPopulation(settings.warmStart);
+  if(e.key==='n'||e.key==='N') endGeneration();
+  if(e.key==='t'||e.key==='T') settings.showTrails=!settings.showTrails;
+});
+
+mCanvas.addEventListener('mousemove',e=>{
+  const r=mCanvas.getBoundingClientRect();
+  const x=Math.floor((e.clientX-r.left)/r.width*KIND_COUNT);
+  const y=Math.floor((e.clientY-r.top)/r.height*KIND_COUNT);
+  hoverMatrix = (x>=0&&x<KIND_COUNT&&y>=0&&y<KIND_COUNT) ? {x,y} : null;
+  drawMatrix();
+});
+mCanvas.addEventListener('mouseleave',()=>{hoverMatrix=null;drawMatrix();});
+mCanvas.addEventListener('wheel',e=>{
+  if(!championGenome || !hoverMatrix) return;
+  e.preventDefault();
+  const i=idx(hoverMatrix.y, hoverMatrix.x);
+  const sign = e.deltaY < 0 ? 1 : -1;
+  if(e.shiftKey){ championGenome.radii[i] = clamp(championGenome.radii[i] + sign*2.5, 4, 150); }
+  else { championGenome.strengths[i] = clamp(championGenome.strengths[i] + sign*0.01, -0.25, 0.25); }
+  // If the selected organism uses this genome, let the edit affect it immediately.
+  const sel=organisms.find(o=>o.id===selectedOrgId);
+  if(sel && sel.genome === championGenome) sel.genome.edited = true;
+  drawMatrix();
+},{passive:false});
+
+function makeArena(type){
+  const a={type, food:[], hazards:[], walls:[], waypoints:[], name:'', spawn:'edge', dynamic:null, hideTarget:false, description:''};
+  if(type==='core'){
+    a.name='Reach Core Garden'; a.spawn='ring';
+    a.description='Simple gradient check: target and food overlap in the center. Good for debugging, intentionally easy.';
+    a.waypoints=[{x:WORLD.w/2,y:WORLD.h/2,r:74,label:'CORE'}];
+    a.food=[{x:WORLD.w/2,y:WORLD.h/2,r:120,power:0.030},{x:WORLD.w*.38,y:WORLD.h*.42,r:45,power:0.011},{x:WORLD.w*.65,y:WORLD.h*.61,r:40,power:0.011}];
+    a.hazards=[{x:WORLD.w*.50,y:WORLD.h*.20,r:48,power:0.020},{x:WORLD.w*.24,y:WORLD.h*.58,r:36,power:0.016},{x:WORLD.w*.77,y:WORLD.h*.43,r:38,power:0.016}];
+  } else if(type==='glyphs'){
+    a.name='Visit Glyph Sequence'; a.spawn='left';
+    a.description='Sequential waypoint pressure. Target vector changes after each glyph, so lineages benefit from stable control and not fragmenting after turns.';
+    a.waypoints=[{x:190,y:135,r:42,label:'I'},{x:832,y:155,r:42,label:'II'},{x:512,y:514,r:48,label:'III'}];
+    a.food=a.waypoints.map(w=>({x:w.x,y:w.y,r:w.r+18,power:0.020}));
+    a.hazards=[{x:WORLD.w*.50,y:WORLD.h*.50,r:80,power:.025},{x:WORLD.w*.31,y:WORLD.h*.31,r:34,power:.018},{x:WORLD.w*.70,y:WORLD.h*.68,r:34,power:.018}];
+  } else if(type==='maze'){
+    a.name='Food Labyrinth'; a.spawn='left';
+    a.description='Static maze. Target/food is on the far side; wall sensors and compact cell integrity become useful.';
+    a.waypoints=[{x:WORLD.w-95,y:WORLD.h/2,r:60,label:'NUTRIENT'}];
+    a.food=[{x:WORLD.w-95,y:WORLD.h/2,r:95,power:.035},{x:430,y:95,r:35,power:.014},{x:610,y:535,r:35,power:.014}];
+    a.hazards=[{x:335,y:320,r:58,power:.030},{x:705,y:320,r:58,power:.030}];
+    a.walls=[{x:260,y:0,w:22,h:250},{x:260,y:390,w:22,h:250},{x:500,y:155,w:22,h:330},{x:740,y:0,w:22,h:250},{x:740,y:390,w:22,h:250}];
+  } else if(type==='toxic'){
+    a.name='Toxic Spiral'; a.spawn='ring';
+    a.description='Hazard-gradient test. The safe food zone is offset, while a spiral of poison punishes direct or overenergetic motion.';
+    a.waypoints=[{x:WORLD.w*.72,y:WORLD.h*.30,r:50,label:'SAFE'}];
+    a.food=[{x:WORLD.w*.72,y:WORLD.h*.30,r:78,power:.032},{x:WORLD.w*.28,y:WORLD.h*.75,r:52,power:.014}];
+    for(let k=0;k<8;k++){
+      const t=k/8*TAU+0.3, rr=65+k*28;
+      a.hazards.push({x:WORLD.w/2+Math.cos(t)*rr,y:WORLD.h/2+Math.sin(t)*rr,r:28+k*2,power:.017});
+    }
+  } else if(type==='gate'){
+    a.name='Moving Gate Gauntlet'; a.spawn='left'; a.dynamic='gates';
+    a.description='Dynamic wall-gate pressure. Moving gaps force organisms to slow, sense walls, and maintain compact bodies through bottlenecks.';
+    a.waypoints=[{x:WORLD.w-84,y:WORLD.h*.50,r:58,label:'EXIT'}];
+    a.food=[{x:WORLD.w-84,y:WORLD.h*.50,r:90,power:.030},{x:WORLD.w*.42,y:WORLD.h*.22,r:34,power:.011},{x:WORLD.w*.62,y:WORLD.h*.78,r:34,power:.011}];
+    a.hazards=[{x:WORLD.w*.50,y:WORLD.h*.50,r:42,power:.020}];
+  } else if(type==='wheel'){
+    a.name='Rotating Hazard Wheel'; a.spawn='ring'; a.dynamic='wheel';
+    a.description='Timing pressure. The target is near center but rotating toxins make constant target-seeking fail unless hazard avoidance and oscillator genes cooperate.';
+    a.waypoints=[{x:WORLD.w*.50,y:WORLD.h*.50,r:58,label:'EYE'}];
+    a.food=[{x:WORLD.w*.50,y:WORLD.h*.50,r:82,power:.030},{x:WORLD.w*.18,y:WORLD.h*.18,r:38,power:.012},{x:WORLD.w*.82,y:WORLD.h*.82,r:38,power:.012}];
+    a.hazards=[{x:WORLD.w*.50,y:WORLD.h*.50,r:34,power:.012}];
+  } else if(type==='forage'){
+    a.name='Sparse Forager Desert'; a.spawn='random'; a.hideTarget=true;
+    a.description='No explicit target vector. Survival is mostly food discovery, energy economy, and not crowding or fragmenting.';
+    a.food=[{x:150,y:115,r:45,power:.022},{x:860,y:120,r:42,power:.022},{x:290,y:520,r:46,power:.023},{x:760,y:500,r:48,power:.023},{x:520,y:310,r:32,power:.014}];
+    a.hazards=[{x:WORLD.w*.50,y:WORLD.h*.50,r:115,power:.022},{x:WORLD.w*.28,y:WORLD.h*.30,r:36,power:.020},{x:WORLD.w*.73,y:WORLD.h*.70,r:36,power:.020}];
+  } else if(type==='trap'){
+    a.name='Baited Core Trap'; a.spawn='ring';
+    a.description='Deceptive core pressure. The target is valuable, but surrounding poison punishes blind attraction and rewards gap-finding.';
+    a.waypoints=[{x:WORLD.w*.50,y:WORLD.h*.50,r:44,label:'BAIT'}];
+    a.food=[{x:WORLD.w*.50,y:WORLD.h*.50,r:65,power:.040},{x:WORLD.w*.18,y:WORLD.h*.52,r:44,power:.012},{x:WORLD.w*.82,y:WORLD.h*.48,r:44,power:.012}];
+    for(let k=0;k<10;k++){
+      if(k===1 || k===6) continue; // two openings
+      const t=k/10*TAU;
+      a.hazards.push({x:WORLD.w/2+Math.cos(t)*118,y:WORLD.h/2+Math.sin(t)*118,r:42,power:.026});
+    }
+  } else if(type==='relay'){
+    a.name='Signal Relay Corridor'; a.spawn='left';
+    a.description='Communication pressure. Waypoints only count when the organism emits signal nearby, so emit-signal must co-evolve with navigation.';
+    a.waypoints=[{x:245,y:150,r:46,label:'PING I',requireEmit:true},{x:515,y:500,r:46,label:'PING II',requireEmit:true},{x:850,y:230,r:52,label:'PING III',requireEmit:true}];
+    a.food=a.waypoints.map(w=>({x:w.x,y:w.y,r:w.r+20,power:.020}));
+    a.hazards=[{x:380,y:320,r:55,power:.024},{x:660,y:310,r:70,power:.024}];
+    a.walls=[{x:330,y:0,w:18,h:250},{x:330,y:390,w:18,h:250},{x:680,y:0,w:18,h:315},{x:680,y:450,w:18,h:190}];
+  }
+  return a;
+}
+
+function activeFood(){ return arena?.food || []; }
+function activeHazards(){
+  if(!arena) return [];
+  if(arena.dynamic==='wheel'){
+    const arr=[...arena.hazards];
+    const spin=time*0.018;
+    for(let k=0;k<7;k++){
+      const t=spin+k*TAU/7;
+      arr.push({x:WORLD.w/2+Math.cos(t)*170,y:WORLD.h/2+Math.sin(t)*170,r:34,power:.028});
+      arr.push({x:WORLD.w/2+Math.cos(-spin*0.72+t)*92,y:WORLD.h/2+Math.sin(-spin*0.72+t)*92,r:24,power:.020});
+    }
+    return arr;
+  }
+  return arena.hazards || [];
+}
+function activeWalls(){
+  if(!arena) return [];
+  if(arena.dynamic==='gates'){
+    const walls=[];
+    const xs=[300,525,750];
+    const phases=[0,1.8,3.4];
+    for(let i=0;i<xs.length;i++){
+      const gap=95;
+      const cy=WORLD.h*.5 + Math.sin(time*0.018+phases[i])*175;
+      walls.push({x:xs[i],y:0,w:24,h:Math.max(0,cy-gap*.5)});
+      walls.push({x:xs[i],y:cy+gap*.5,w:24,h:Math.max(0,WORLD.h-(cy+gap*.5))});
+    }
+    return walls;
+  }
+  return arena.walls || [];
+}
+function currentWaypoint(org){
+  if(!arena || !arena.waypoints.length) return null;
+  if(org.nextWaypoint >= arena.waypoints.length) return null;
+  return arena.waypoints[org.nextWaypoint];
+}
+function targetFor(org){
+  const wp=currentWaypoint(org);
+  if(wp && !arena.hideTarget) return wp;
+  const foods=activeFood();
+  if(foods.length && !arena.hideTarget) return nearestObject(org.x, org.y, foods);
+  return null;
+}
+function nearestObject(x,y,arr){
+  let best=null,bestD=1e99;
+  for(const z of arr){ const dx=z.x-x, dy=z.y-y, d2=dx*dx+dy*dy; if(d2<bestD){bestD=d2; best=z;} }
+  return best;
+}
+
+
+function baseChem(){
+  const radii=new Float32Array(KIND_COUNT*KIND_COUNT);
+  const strengths=new Float32Array(KIND_COUNT*KIND_COUNT);
+  for(let a=0;a<KIND_COUNT;a++) for(let b=0;b<KIND_COUNT;b++){
+    const ia=Math.floor(a/ROLES_PER_CELL), ib=Math.floor(b/ROLES_PER_CELL);
+    const ra=a%ROLES_PER_CELL, rb=b%ROLES_PER_CELL;
+    const same=ia===ib;
+    const p=idx(a,b);
+    let rad=same?42:78;
+    let str=same?0.015:0.004;
+    if(same){
+      if(ra===0 && rb===0){ rad=22; str=-0.048; }       // membrane spreads
+      if(ra===1 && rb===1){ rad=48; str= 0.035; }       // core condenses
+      if(ra===0 && rb===1){ rad=52; str= 0.058; }       // membrane follows core
+      if(ra===1 && rb===0){ rad=35; str=-0.020; }       // core resists membrane collapse
+      if(ra===2 && rb===1){ rad=62; str= 0.028; }       // motor attaches to core
+      if(ra===1 && rb===2){ rad=36; str=-0.010; }
+      if(ra===2 && rb===2){ rad=28; str=-0.012; }
+    } else {
+      // weak block-to-block chemistry: this is the body-binding substrate.
+      if(ra===1 && rb===1){ rad=96; str=0.006; }
+      if(ra===0 && rb===0){ rad=48; str=-0.006; }
+      if(ra===2 || rb===2){ rad=80; str+=0.002*gauss(); }
+    }
+    radii[p]=clamp(rad + gauss()*4, 6, 130);
+    strengths[p]=clamp(str + gauss()*0.008, -0.14, 0.14);
+  }
+  return {radii, strengths};
+}
+
+let genomeSerial=1;
+const syll=['xen','ora','myr','thal','ix','vex','sol','nyx','khe','lum','zar','ael','qor','ves','ryn','omi'];
+function makeName(){ return `${choice(syll)}-${choice(syll)}-${Math.floor(rand(99,10))}`.toUpperCase(); }
+function randomGene(){
+  return {
+    srcType: Math.random()<0.72?0:1,
+    src: 0,
+    dstType: Math.random()<0.42?0:1,
+    dst: 0,
+    w: clamp(gauss()*0.8, -3, 3)
+  };
+}
+function fixGene(g){
+  g.src = g.srcType===0 ? randi(SENSOR_NAMES.length) : randi(MAX_NEURONS);
+  g.dst = g.dstType===0 ? randi(MAX_NEURONS) : randi(ACTION_NAMES.length);
+  return g;
+}
+function makeBody(seed=true){
+  const n=seed ? 4 : randi(4)+2;
+  const body=[];
+  body.push({type:0, ox:0, oy:0, radius:22+rand(6)});
+  for(let i=1;i<n;i++){
+    const ang=(i-1)/(Math.max(1,n-1))*TAU + gauss()*0.18;
+    const rr=42+rand(35);
+    body.push({type:i%CELL_TYPES, ox:Math.cos(ang)*rr, oy:Math.sin(ang)*rr, radius:18+rand(10)});
+  }
+  return body;
+}
+function makeGenome(seed=true){
+  const chem=baseChem();
+  const g={
+    uid: genomeSerial++, name:makeName(), born:generation, hue:Math.random(), parentIds:[],
+    radii:chem.radii, strengths:chem.strengths,
+    body:makeBody(seed),
+    genes:[], motorGain:seed?1.05:rand(1.2,0.55), scaffold:seed?0.42:rand(0.60,0.18), metabolism:rand(0.010,0.004),
+    mutationScale:1.0, notes:[]
+  };
+  if(seed){
+    // Warm-start with plausible mappings so selection pressure shows up quickly;
+    // mutation/crossover still have plenty of room to damage or improve it.
+    const G=(s,a,w)=>g.genes.push({srcType:0,src:s,dstType:1,dst:a,w});
+    G(2,0, 1.45); G(3,1, 1.45); // target vector -> movement
+    G(4,0, 0.85); G(5,1, 0.85); // food vector -> movement
+    G(6,0, 1.10); G(7,1, 1.10); // hazard-away vector -> movement
+    G(9,2, 0.90);                // integrity -> cohere
+    G(8,5, 0.55);                // energy -> eat-bias
+    G(11,6, 0.45); G(12,7, 0.35); // oscillator wiggle
+    G(14,0, 0.35); G(15,1, 0.35); // signal gradient -> movement
+    for(let i=0;i<12;i++) g.genes.push(fixGene(randomGene()));
+  } else {
+    for(let i=0;i<26;i++) g.genes.push(fixGene(randomGene()));
+  }
+  return g;
+}
+function cloneGenome(g){
+  return {
+    uid: genomeSerial++, name:g.name, born:generation, hue:g.hue, parentIds:[g.uid],
+    radii:new Float32Array(g.radii), strengths:new Float32Array(g.strengths),
+    body:g.body.map(c=>({...c})), genes:g.genes.map(x=>({...x})),
+    motorGain:g.motorGain, scaffold:g.scaffold, metabolism:g.metabolism, mutationScale:g.mutationScale,
+    notes:[...(g.notes||[])]
+  };
+}
+function breedGenome(a,b){
+  if(!b || !settings.crossover) return mutateGenome(cloneGenome(a));
+  const child=cloneGenome(a);
+  child.name=makeName(); child.parentIds=[a.uid,b.uid]; child.hue=(Math.random()<0.5?a.hue:b.hue)+gauss()*0.02;
+  // Block crossover: whole cell-type interaction blocks are inherited together.
+  for(let ba=0;ba<CELL_TYPES;ba++) for(let bb=0;bb<CELL_TYPES;bb++){
+    const donor=Math.random()<0.5?a:b;
+    for(let ra=0;ra<ROLES_PER_CELL;ra++) for(let rb=0;rb<ROLES_PER_CELL;rb++){
+      const k1=ba*ROLES_PER_CELL+ra, k2=bb*ROLES_PER_CELL+rb, p=idx(k1,k2);
+      child.radii[p]=donor.radii[p]; child.strengths[p]=donor.strengths[p];
+    }
+  }
+  // Body crossover: cells are mixed, offsets blended or inherited.
+  const maxN=Math.max(a.body.length,b.body.length);
+  child.body=[];
+  for(let i=0;i<maxN;i++){
+    const ca=a.body[i%a.body.length], cb=b.body[i%b.body.length];
+    const donor=Math.random()<0.5?ca:cb;
+    if(Math.random()<0.75 || i<2){
+      child.body.push({
+        type: Math.random()<0.5?ca.type:cb.type,
+        ox: Math.random()<0.45?lerp(ca.ox,cb.ox,rand()):donor.ox,
+        oy: Math.random()<0.45?lerp(ca.oy,cb.oy,rand()):donor.oy,
+        radius: Math.random()<0.45?lerp(ca.radius,cb.radius,rand()):donor.radius
+      });
+    }
+  }
+  if(child.body.length<1) child.body.push({...a.body[0]});
+  // Neural crossover: slice + union.
+  const cutA=randi(a.genes.length+1), cutB=randi(b.genes.length+1);
+  child.genes=[...a.genes.slice(0,cutA),...b.genes.slice(cutB)].slice(0,64).map(x=>({...x}));
+  child.motorGain=lerp(a.motorGain,b.motorGain,rand());
+  child.scaffold=lerp(a.scaffold,b.scaffold,rand());
+  child.metabolism=lerp(a.metabolism,b.metabolism,rand());
+  return mutateGenome(child);
+}
+function mutateGenome(g){
+  const rate=settings.mutationRate*g.mutationScale;
+  for(let p=0;p<g.strengths.length;p++){
+    if(Math.random()<rate*0.55) g.strengths[p]=clamp(g.strengths[p]+gauss()*0.018, -0.22, 0.22);
+    if(Math.random()<rate*0.35) g.radii[p]=clamp(g.radii[p]+gauss()*5.0, 5, 150);
+    if(Math.random()<rate*0.015) g.strengths[p]*=-1;
+  }
+  for(const c of g.body){
+    if(Math.random()<rate*1.8){ c.ox+=gauss()*10; c.oy+=gauss()*10; }
+    if(Math.random()<rate*0.6) c.radius=clamp(c.radius+gauss()*3, 8, 46);
+    if(Math.random()<rate*0.15) c.type=randi(CELL_TYPES);
+  }
+  if(Math.random()<rate*0.35 && g.body.length<7){
+    const base=choice(g.body); const ang=rand(TAU), rr=rand(85,30);
+    g.body.push({type:randi(CELL_TYPES), ox:base.ox+Math.cos(ang)*rr, oy:base.oy+Math.sin(ang)*rr, radius:clamp(base.radius+gauss()*4,10,44)});
+    g.notes.push('added cell');
+  }
+  if(Math.random()<rate*0.20 && g.body.length>1){ g.body.splice(randi(g.body.length),1); g.notes.push('lost cell'); }
+  g.motorGain=clamp(g.motorGain+gauss()*rate*0.5, 0.05, 2.4);
+  g.scaffold=clamp(g.scaffold+gauss()*rate*0.22, 0.02, 1.2);
+  g.metabolism=clamp(g.metabolism+gauss()*rate*0.004, 0.001, 0.03);
+  for(const gene of g.genes){
+    if(Math.random()<rate*1.3) gene.w=clamp(gene.w+gauss()*0.35, -4, 4);
+    if(Math.random()<rate*0.18) { gene.srcType=1-gene.srcType; fixGene(gene); }
+    if(Math.random()<rate*0.18) { gene.dstType=1-gene.dstType; fixGene(gene); }
+    if(Math.random()<rate*0.25) fixGene(gene);
+  }
+  if(Math.random()<rate*0.9 && g.genes.length<72) g.genes.push(fixGene(randomGene()));
+  if(Math.random()<rate*0.45 && g.genes.length>4) g.genes.splice(randi(g.genes.length),1);
+  g.hue=(g.hue%1+1)%1;
+  return g;
+}
+
+let orgSerial=1;
+function spawnPosition(i,n){
+  if(arena.spawn==='left') return {x:70+rand(45), y:80+rand(WORLD.h-160)};
+  if(arena.spawn==='ring'){
+    const ang=i/n*TAU + rand(0.2,-0.2); const rr=Math.min(WORLD.w,WORLD.h)*0.43;
+    return {x:WORLD.w/2+Math.cos(ang)*rr, y:WORLD.h/2+Math.sin(ang)*rr};
+  }
+  if(arena.spawn==='random') return {x:rand(WORLD.w-140,70), y:rand(WORLD.h-140,70)};
+  return {x:rand(WORLD.w-120,60), y:rand(WORLD.h-120,60)};
+}
+function spawnOrganism(genome, i, n){
+  const pos=spawnPosition(i,n);
+  const org={ id:orgSerial++, genome, x:pos.x, y:pos.y, vx:0, vy:0, theta:rand(TAU),
+    energy:1.0, age:0, score:0, food:0, hazard:0, alive:true, reached:0, nextWaypoint:0,
+    integrity:1, cohesionAction:1, expandAction:1, emit:0, eatBias:0.5, motorX:0, motorY:0,
+    neurons:new Float32Array(MAX_NEURONS), particles:[], cells:[], bestScore:0, deathReason:'' };
+  organisms.push(org);
+  for(let ci=0;ci<genome.body.length;ci++){
+    const cdef=genome.body[ci];
+    const cell={ index:ci, type:cdef.type, x:pos.x+cdef.ox, y:pos.y+cdef.oy, vx:0, vy:0, radius:cdef.radius, particles:[], integrity:1 };
+    org.cells.push(cell);
+    for(let pi=0; pi<settings.particlesPerCell; pi++){
+      const rolePick=Math.random();
+      const localRole=rolePick<0.42?0:(rolePick<0.78?1:2);
+      const kind=cdef.type*ROLES_PER_CELL+localRole;
+      const ang=rand(TAU);
+      let rr;
+      if(localRole===0) rr=cdef.radius*(0.75+rand(0.25));
+      else if(localRole===1) rr=cdef.radius*rand(0.42);
+      else rr=cdef.radius*(0.25+rand(0.75));
+      const p={ x:cell.x+Math.cos(ang)*rr, y:cell.y+Math.sin(ang)*rr, vx:gauss()*0.4, vy:gauss()*0.4,
+        kind, role:localRole, cellType:cdef.type, orgId:org.id, cellIndex:ci, alive:true };
+      const pIndex=particles.length; particles.push(p); org.particles.push(pIndex); cell.particles.push(pIndex);
+    }
+  }
+  return org;
+}
+function resetPopulation(seeded=settings.warmStart){
+  arena=makeArena(settings.arena); organisms=[]; particles=[]; signal.fill(0); simStep=0; generation=0; orgSerial=1; genomeSerial=1; topSnapshot=[];
+  const genomes=[];
+  for(let i=0;i<settings.population;i++) genomes.push(makeGenome(seeded));
+  for(let i=0;i<settings.population;i++) spawnOrganism(genomes[i], i, settings.population);
+  championGenome=organisms[0]?.genome||null; selectedOrgId=organisms[0]?.id||-1; drawMatrix(); renderCards();
+}
+
+function computeCenters(org){
+  let ox=0, oy=0, total=0, integritySum=0;
+  for(const cell of org.cells){
+    let sx=0, sy=0;
+    for(const pi of cell.particles){ const p=particles[pi]; sx+=p.x; sy+=p.y; }
+    const inv=1/Math.max(1,cell.particles.length);
+    cell.x=sx*inv; cell.y=sy*inv;
+    let avgR=0, inside=0;
+    for(const pi of cell.particles){ const p=particles[pi]; const d=Math.hypot(p.x-cell.x,p.y-cell.y); avgR+=d; if(d<cell.radius*2.2) inside++; }
+    avgR*=inv;
+    const radialFit=Math.exp(-Math.abs(avgR-cell.radius*0.65)/(cell.radius*0.9+1));
+    cell.integrity=clamp(0.35*radialFit + 0.65*(inside*inv),0,1);
+    integritySum+=cell.integrity;
+    ox+=cell.x; oy+=cell.y; total++;
+  }
+  if(total){
+    const nx=ox/total, ny=oy/total;
+    org.vx = nx - org.x;
+    org.vy = ny - org.y;
+    org.x = nx;
+    org.y = ny;
+  }
+  org.integrity=total?integritySum/total:0;
+}
+function nearestVector(x,y,arr,attract=true){
+  let bx=0,by=0,best=1e9,bp=0;
+  for(const z of arr){
+    const dx=z.x-x, dy=z.y-y; const d2=dx*dx+dy*dy+1;
+    const score=d2/(z.power||1);
+    if(score<best){best=score; const inv=1/Math.sqrt(d2); bx=dx*inv; by=dy*inv; bp=z.power||1;}
+  }
+  return attract? [bx,by,bp] : [-bx,-by,bp];
+}
+function nearestWallVector(x,y,walls){
+  let bx=0,by=0,best=1e99;
+  for(const w of walls){
+    const cx=clamp(x,w.x,w.x+w.w), cy=clamp(y,w.y,w.y+w.h);
+    let dx=x-cx, dy=y-cy; let d2=dx*dx+dy*dy;
+    if(d2<EPS){
+      const l=x-w.x, r=w.x+w.w-x, t=y-w.y, b=w.y+w.h-y;
+      const m=Math.min(l,r,t,b);
+      if(m===l){dx=-1;dy=0;d2=1;} else if(m===r){dx=1;dy=0;d2=1;} else if(m===t){dx=0;dy=-1;d2=1;} else {dx=0;dy=1;d2=1;}
+    }
+    if(d2<best){ best=d2; const inv=1/Math.sqrt(d2+EPS); bx=dx*inv; by=dy*inv; }
+  }
+  if(best>180*180) return [0,0,0];
+  return [bx,by,1-Math.sqrt(best)/180];
+}
+function boundaryVector(x,y){
+  const dL=x, dR=WORLD.w-x, dT=y, dB=WORLD.h-y;
+  const m=Math.min(dL,dR,dT,dB);
+  if(m>170) return [0,0,0];
+  if(m===dL) return [1,0,1-m/170];
+  if(m===dR) return [-1,0,1-m/170];
+  if(m===dT) return [0,1,1-m/170];
+  return [0,-1,1-m/170];
+}
+function sigIndex(x,y){ return clamp(Math.floor(x/WORLD.w*SIGW),0,SIGW-1)+clamp(Math.floor(y/WORLD.h*SIGH),0,SIGH-1)*SIGW; }
+function sampleSignal(x,y){ return signal[sigIndex(x,y)]||0; }
+function signalGradient(x,y){
+  const s0=sampleSignal(x,y); const sx=sampleSignal(x+12,y)-sampleSignal(x-12,y); const sy=sampleSignal(x,y+12)-sampleSignal(x,y-12);
+  return [s0, clamp(sx*0.035,-1,1), clamp(sy*0.035,-1,1)];
+}
+function readSensors(org){
+  const tgt=targetFor(org);
+  const tx=tgt?clamp((tgt.x-org.x)/250,-1,1):0;
+  const ty=tgt?clamp((tgt.y-org.y)/250,-1,1):0;
+  const foods=activeFood(), hazards=activeHazards(), walls=activeWalls();
+  const [fx,fy]=nearestVector(org.x,org.y,foods,true);
+  const [hx,hy]=nearestVector(org.x,org.y,hazards,false);
+  const [sg,sx,sy]=signalGradient(org.x,org.y);
+  const [wx,wy]=nearestWallVector(org.x,org.y,walls);
+  const [bx,by]=boundaryVector(org.x,org.y);
+  let cx=0,cy=0;
+  for(const o of organisms){ if(o===org || !o.alive) continue; const dx=org.x-o.x, dy=org.y-o.y, d2=dx*dx+dy*dy+1; if(d2<170*170){ const inv=1/Math.sqrt(d2); cx += dx*inv*(1-d2/(170*170)); cy += dy*inv*(1-d2/(170*170)); }}
+  return [
+    org.x/WORLD.w*2-1, org.y/WORLD.h*2-1, tx,ty, fx,fy,hx,hy,
+    clamp(org.energy/2,0,1), org.integrity, clamp(org.age/settings.stepsPerGeneration,0,1),
+    Math.sin(time*0.045 + org.id), Math.cos(time*0.033 + org.id*0.7),
+    clamp(sg/5,0,1), sx, sy, clamp(cx,-1,1), clamp(cy,-1,1), clamp(org.vx/6,-1,1), clamp(org.vy/6,-1,1), Math.random()*2-1,
+    wx, wy, bx, by
+  ];
+}
+function runBrain(org){
+  const g=org.genome; const sensors=readSensors(org);
+  const neuronInput=new Float32Array(MAX_NEURONS);
+  const out=new Float32Array(ACTION_NAMES.length);
+  // Phase 1: genes accumulate into neurons from sensors or previous recurrent neuron state.
+  for(const gene of g.genes){
+    if(gene.dstType!==0) continue;
+    const v=gene.srcType===0 ? sensors[gene.src % sensors.length] : org.neurons[gene.src % MAX_NEURONS];
+    neuronInput[gene.dst % MAX_NEURONS]+=v*gene.w;
+  }
+  for(let i=0;i<MAX_NEURONS;i++) org.neurons[i]=Math.tanh(neuronInput[i]+org.neurons[i]*0.18);
+  // Phase 2: action genes read sensors or updated neurons and write motor/behavior channels.
+  const contrib=[];
+  for(const gene of g.genes){
+    if(gene.dstType!==1) continue;
+    const v=gene.srcType===0 ? sensors[gene.src % sensors.length] : org.neurons[gene.src % MAX_NEURONS];
+    const c=v*gene.w;
+    const a=gene.dst % ACTION_NAMES.length;
+    out[a]+=c;
+    contrib.push({srcType:gene.srcType, src:gene.src, dst:a, value:v, weight:gene.w, contribution:c});
+  }
+  org.motorX=Math.tanh(out[0])*g.motorGain;
+  org.motorY=Math.tanh(out[1])*g.motorGain;
+  org.cohesionAction=clamp(0.42 + sigmoid(out[2])*1.35, 0.25, 1.85);
+  org.expandAction=clamp(1.0 + Math.tanh(out[3])*0.38, 0.60, 1.45);
+  org.emit=sigmoid(out[4]);
+  org.eatBias=sigmoid(out[5]);
+  org.theta += Math.tanh(out[6])*0.04;
+  const pulse=Math.tanh(out[7]);
+  org.cohesionAction=clamp(org.cohesionAction + pulse*0.18,0.15,2.2);
+  if(Math.hypot(org.motorX,org.motorY)>0.1) org.theta=lerpAngle(org.theta, Math.atan2(org.motorY,org.motorX), 0.05);
+  org.lastSensors=Array.from(sensors);
+  org.lastRawActions=Array.from(out);
+  org.lastActions=[org.motorX,org.motorY,org.cohesionAction,org.expandAction,org.emit,org.eatBias,Math.tanh(out[6]),pulse];
+  org.lastBrainContribs=contrib.sort((a,b)=>Math.abs(b.contribution)-Math.abs(a.contribution)).slice(0,10);
+}
+function lerpAngle(a,b,t){ let d=((b-a+Math.PI)%TAU)-Math.PI; return a+d*t; }
+function addSignal(x,y,amount){
+  const gx=Math.floor(x/WORLD.w*SIGW), gy=Math.floor(y/WORLD.h*SIGH);
+  for(let yy=-2;yy<=2;yy++)for(let xx=-2;xx<=2;xx++){
+    const nx=gx+xx, ny=gy+yy; if(nx<0||ny<0||nx>=SIGW||ny>=SIGH) continue;
+    const d=Math.hypot(xx,yy); if(d>2.5) continue;
+    const p=nx+ny*SIGW; signal[p]=Math.min(255,signal[p]+amount*(1-d/3));
+  }
+}
+function decaySignals(){
+  for(let i=0;i<signal.length;i++) signal[i]*=0.988;
+  if((simStep&7)===0){
+    const copy=signal.slice();
+    for(let y=1;y<SIGH-1;y++)for(let x=1;x<SIGW-1;x++){
+      const p=x+y*SIGW;
+      signal[p]=copy[p]*0.82+(copy[p-1]+copy[p+1]+copy[p-SIGW]+copy[p+SIGW])*0.045;
+    }
+  }
+}
+
+function physicsStep(){
+  decaySignals();
+  for(const org of organisms){ if(org.alive) computeCenters(org); }
+  for(const org of organisms){ if(!org.alive) continue; runBrain(org); if(org.emit>0.72) addSignal(org.x,org.y,org.emit*5); }
+
+  // Genome-specific particle chemistry, only inside each organism; this keeps CPU cost low and makes the body recipe hereditary.
+  for(const org of organisms){
+    if(!org.alive) continue;
+    const g=org.genome, ps=org.particles;
+    const cohesion=org.cohesionAction;
+    for(let ai=0;ai<ps.length;ai++){
+      const pa=particles[ps[ai]];
+      for(let bi=ai+1;bi<ps.length;bi++){
+        const pb=particles[ps[bi]];
+        let dx=pb.x-pa.x, dy=pb.y-pa.y; let r2=dx*dx+dy*dy+EPS; let r=Math.sqrt(r2);
+        const ab=idx(pa.kind,pb.kind), ba=idx(pb.kind,pa.kind);
+        const rab=g.radii[ab], rba=g.radii[ba];
+        if(r<rab){ const f=g.strengths[ab]*(1-r/rab)*cohesion; const nx=dx/r, ny=dy/r; pa.vx+=nx*f; pa.vy+=ny*f; }
+        if(r<rba){ const f=g.strengths[ba]*(1-r/rba)*cohesion; const nx=-dx/r, ny=-dy/r; pb.vx+=nx*f; pb.vy+=ny*f; }
+      }
+    }
+    const ca=Math.cos(org.theta), sa=Math.sin(org.theta);
+    for(const cell of org.cells){
+      const cdef=g.body[cell.index] || g.body[0];
+      const ax=org.x + (cdef.ox*ca - cdef.oy*sa)*org.expandAction;
+      const ay=org.y + (cdef.ox*sa + cdef.oy*ca)*org.expandAction;
+      const basePull=0.0035*g.scaffold*cohesion;
+      for(const pi of cell.particles){
+        const p=particles[pi];
+        p.vx += (ax-p.x)*basePull;
+        p.vy += (ay-p.y)*basePull;
+        const dx=p.x-cell.x, dy=p.y-cell.y; const d=Math.hypot(dx,dy)+EPS;
+        if(p.role===0){ // membrane maintains a shell
+          const target=cell.radius*org.expandAction; const corr=(d-target)*-0.006;
+          p.vx += dx/d*corr; p.vy += dy/d*corr;
+        } else if(p.role===1){ // core resists wandering
+          p.vx += (cell.x-p.x)*0.0032; p.vy += (cell.y-p.y)*0.0032;
+        } else { // motor particles express brain actions more strongly
+          p.vx += org.motorX*0.055; p.vy += org.motorY*0.055;
+        }
+        // all particles get a weaker body motion urge
+        p.vx += org.motorX*0.013; p.vy += org.motorY*0.013;
+      }
+    }
+  }
+
+  // Environment forces and integration.
+  const envHazards=activeHazards();
+  const envWalls=activeWalls();
+  for(const org of organisms){
+    if(!org.alive) continue;
+    let speedCost=0;
+    for(const pi of org.particles){
+      const p=particles[pi];
+      for(const h of envHazards){
+        const dx=p.x-h.x, dy=p.y-h.y; const d=Math.hypot(dx,dy)+EPS;
+        if(d<h.r+12){ const f=(1-d/(h.r+12))*0.18; p.vx += dx/d*f; p.vy += dy/d*f; }
+      }
+      for(const w of envWalls){
+        if(p.x>w.x && p.x<w.x+w.w && p.y>w.y && p.y<w.y+w.h){
+          const l=p.x-w.x, r=w.x+w.w-p.x, t=p.y-w.y, b=w.y+w.h-p.y;
+          const m=Math.min(l,r,t,b);
+          if(m===l){p.x=w.x-1;p.vx=-Math.abs(p.vx)*0.45;} else if(m===r){p.x=w.x+w.w+1;p.vx=Math.abs(p.vx)*0.45;}
+          else if(m===t){p.y=w.y-1;p.vy=-Math.abs(p.vy)*0.45;} else {p.y=w.y+w.h+1;p.vy=Math.abs(p.vy)*0.45;}
+          org.energy-=0.0009;
+        }
+      }
+      p.vx*=0.972; p.vy*=0.972;
+      const sp=Math.hypot(p.vx,p.vy); if(sp>8){p.vx=p.vx/sp*8; p.vy=p.vy/sp*8;}
+      p.x += p.vx; p.y += p.vy;
+      if(p.x<6){p.x=6;p.vx=Math.abs(p.vx)*0.55;} if(p.x>WORLD.w-6){p.x=WORLD.w-6;p.vx=-Math.abs(p.vx)*0.55;}
+      if(p.y<6){p.y=6;p.vy=Math.abs(p.vy)*0.55;} if(p.y>WORLD.h-6){p.y=WORLD.h-6;p.vy=-Math.abs(p.vy)*0.55;}
+      speedCost+=sp;
+    }
+    computeCenters(org);
+    const oldScore=org.score;
+    updateSurvival(org, speedCost/Math.max(1,org.particles.length));
+    org.bestScore=Math.max(org.bestScore,org.score);
+    org.score = Math.max(org.score, oldScore - 0.00001); // monotonic-ish against tiny floating noise
+  }
+  simStep++; time++;
+  if(simStep>=settings.stepsPerGeneration) endGeneration();
+}
+function updateSurvival(org, meanSpeed){
+  org.age++;
+  let foodGain=0, hazardLoss=0;
+  const foods=activeFood(), hazards=activeHazards(), walls=activeWalls();
+  for(const f of foods){ const d=Math.hypot(org.x-f.x,org.y-f.y); if(d<f.r){ foodGain += f.power*(1-d/f.r)*(0.55+org.eatBias); } }
+  for(const h of hazards){ const d=Math.hypot(org.x-h.x,org.y-h.y); if(d<h.r){ hazardLoss += h.power*(1-d/h.r); } }
+  for(const w of walls){ if(org.x>w.x && org.x<w.x+w.w && org.y>w.y && org.y<w.y+w.h) hazardLoss += 0.03; }
+  org.food += foodGain; org.hazard += hazardLoss;
+  org.energy += foodGain - hazardLoss - org.genome.metabolism*(1+org.cells.length*0.16) - meanSpeed*0.00035 - Math.max(0,1-org.integrity)*0.004;
+  org.energy=clamp(org.energy, -0.3, 3.5);
+  const wp=currentWaypoint(org);
+  if(wp){
+    const d=Math.hypot(org.x-wp.x,org.y-wp.y);
+    const targetScore=clamp(1-d/Math.max(WORLD.w,WORLD.h),0,1);
+    org.score += targetScore*0.006 + org.integrity*0.002 + foodGain*4 - hazardLoss*6;
+    const canClaim = d<wp.r && (!wp.requireEmit || org.emit>0.55);
+    if(canClaim){ org.nextWaypoint++; org.reached++; org.score += 16 + org.reached*5; addSignal(org.x,org.y,20); }
+    else if(wp.requireEmit && d<wp.r*1.3){ org.score += org.emit*0.010; }
+  } else {
+    // After waypoints are complete, stop awarding waypoint bonuses. This fixes the old runaway core-score exploit.
+    org.score += org.integrity*0.004 + foodGain*5 - hazardLoss*7 + Math.min(0.006, org.energy*0.001);
+    if(arena.type==='forage'){
+      const centerDist=Math.hypot(org.x-WORLD.w/2, org.y-WORLD.h/2)/Math.max(WORLD.w,WORLD.h);
+      org.score += foodGain*5 + centerDist*0.0007; // mild exploration pressure
+    }
+  }
+  if(arena.type==='gate') org.score += clamp((org.x-70)/(WORLD.w-140),0,1)*0.003;
+  if(arena.type==='wheel') org.score += Math.max(0,1-hazardLoss*20)*0.002;
+  if(org.energy<=0){ org.alive=false; org.deathReason='starved'; org.score-=2; }
+  if(org.integrity<0.10 && org.age>90){ org.alive=false; org.deathReason='fragmented'; org.score-=1.5; }
+}
+function endGeneration(){
+  if(!organisms.length) return;
+  for(const o of organisms){ computeCenters(o); o.finalFitness=Math.max(0.001, o.score + o.energy*2 + o.integrity*3 + o.reached*6 - o.hazard*3); }
+  const sorted=[...organisms].sort((a,b)=>b.finalFitness-a.finalFitness);
+  lastBest=sorted[0].finalFitness;
+  lastAvg=organisms.reduce((s,o)=>s+o.finalFitness,0)/organisms.length;
+  lastDiversity=estimateDiversity(sorted.slice(0,Math.min(8,sorted.length)).map(o=>o.genome));
+  championGenome=cloneGenome(sorted[0].genome); championGenome.name=sorted[0].genome.name; championGenome.uid=sorted[0].genome.uid;
+  topSnapshot=sorted.slice(0,6).map(o=>({id:o.id, genome:o.genome, fitness:o.finalFitness, score:o.score, reached:o.reached, integrity:o.integrity, energy:o.energy, cells:o.cells.length, reason:o.deathReason}));
+  renderCards(); drawMatrix();
+  const eliteN=Math.max(2, Math.floor(settings.population*settings.selectionFrac));
+  const elites=sorted.slice(0, eliteN);
+  const newGenomes=[];
+  newGenomes.push(cloneGenome(sorted[0].genome)); // elitism
+  while(newGenomes.length<settings.population){
+    const p1=pickParent(elites), p2=pickParent(elites);
+    newGenomes.push(breedGenome(p1.genome, p2.genome));
+  }
+  generation++; simStep=0; particles=[]; organisms=[]; signal.fill(0);
+  for(let i=0;i<newGenomes.length;i++) spawnOrganism(newGenomes[i], i, newGenomes.length);
+  selectedOrgId=organisms[0]?.id||-1;
+}
+function pickParent(elites){
+  // tournament selection; robust when all scores are bad.
+  let best=choice(elites);
+  for(let i=0;i<2;i++){ const c=choice(elites); if(c.finalFitness>best.finalFitness) best=c; }
+  return best;
+}
+function estimateDiversity(gs){
+  if(gs.length<2) return 0;
+  let n=0,sum=0;
+  for(let i=0;i<gs.length;i++)for(let j=i+1;j<gs.length;j++){
+    let d=0;
+    for(let k=0;k<gs[i].strengths.length;k+=3) d+=Math.abs(gs[i].strengths[k]-gs[j].strengths[k]);
+    d/=Math.ceil(gs[i].strengths.length/3);
+    d+=Math.abs(gs[i].body.length-gs[j].body.length)*0.02;
+    sum+=d;n++;
+  }
+  return sum/n;
+}
+
+function draw(){
+  if(!settings.showTrails){ ctx.setTransform(canvas.width/WORLD.w,0,0,canvas.height/WORLD.h,0,0); ctx.fillStyle='#020504'; ctx.fillRect(0,0,WORLD.w,WORLD.h); }
+  else { ctx.setTransform(canvas.width/WORLD.w,0,0,canvas.height/WORLD.h,0,0); ctx.fillStyle='rgba(2,5,4,0.10)'; ctx.fillRect(0,0,WORLD.w,WORLD.h); }
+  drawArena();
+  if(settings.showSignals) drawSignals();
+  if(settings.showSkeleton) drawSkeletons();
+  if(settings.showCells) drawCells();
+  if(settings.showParticles) drawParticles();
+  drawSelection();
+  updateHud();
+}
+function drawArena(){
+  ctx.save();
+  ctx.strokeStyle='#1f6c49'; ctx.lineWidth=2; ctx.strokeRect(4,4,WORLD.w-8,WORLD.h-8);
+  const walls=activeWalls(), hazards=activeHazards(), foods=activeFood();
+  for(const w of walls){ ctx.fillStyle='rgba(46,255,140,.16)'; ctx.strokeStyle='rgba(116,255,156,.65)'; ctx.lineWidth=1.5; ctx.fillRect(w.x,w.y,w.w,w.h); ctx.strokeRect(w.x,w.y,w.w,w.h); }
+  for(const h of hazards){
+    const gr=ctx.createRadialGradient(h.x,h.y,0,h.x,h.y,h.r); gr.addColorStop(0,'rgba(255,65,100,.28)'); gr.addColorStop(1,'rgba(255,65,100,0)');
+    ctx.fillStyle=gr; ctx.beginPath(); ctx.arc(h.x,h.y,h.r,0,TAU); ctx.fill(); ctx.strokeStyle='rgba(255,89,104,.38)'; ctx.stroke();
+  }
+  for(const f of foods){
+    const gr=ctx.createRadialGradient(f.x,f.y,0,f.x,f.y,f.r); gr.addColorStop(0,'rgba(111,252,255,.25)'); gr.addColorStop(1,'rgba(111,252,255,0)');
+    ctx.fillStyle=gr; ctx.beginPath(); ctx.arc(f.x,f.y,f.r,0,TAU); ctx.fill(); ctx.strokeStyle='rgba(111,252,255,.30)'; ctx.stroke();
+  }
+  const selected=organisms.find(o=>o.id===selectedOrgId);
+  const activeWp=selected?currentWaypoint(selected):null;
+  for(let i=0;i<arena.waypoints.length;i++){
+    const wp=arena.waypoints[i]; const isActive=activeWp===wp;
+    ctx.strokeStyle=isActive?'rgba(255,211,111,.90)':'rgba(255,211,111,.30)'; ctx.lineWidth=isActive?2.5:1.3;
+    ctx.beginPath(); ctx.arc(wp.x,wp.y,wp.r,0,TAU); ctx.stroke();
+    ctx.fillStyle=isActive?'rgba(255,211,111,.90)':'rgba(255,211,111,.42)'; ctx.font='12px ui-monospace, monospace'; ctx.textAlign='center'; ctx.fillText(wp.label,wp.x,wp.y+4);
+    if(wp.requireEmit){ ctx.font='9px ui-monospace, monospace'; ctx.fillText('EMIT REQUIRED',wp.x,wp.y+18); }
+  }
+  ctx.fillStyle='rgba(116,255,156,.55)'; ctx.font='12px ui-monospace, monospace'; ctx.textAlign='left'; ctx.fillText(arena.name,16,WORLD.h-18);
+  if(arena.description){ ctx.fillStyle='rgba(127,174,148,.60)'; ctx.font='10px ui-monospace, monospace'; ctx.fillText(arena.description.slice(0,130),16,WORLD.h-34); }
+  ctx.restore();
+}
+function drawSignals(){
+  const cw=WORLD.w/SIGW, ch=WORLD.h/SIGH;
+  ctx.save();
+  for(let y=0;y<SIGH;y+=2) for(let x=0;x<SIGW;x+=2){
+    const v=signal[x+y*SIGW]; if(v<1) continue;
+    ctx.fillStyle=`rgba(116,255,156,${Math.min(0.12,v/255*0.28)})`;
+    ctx.fillRect(x*cw,y*ch,cw*2.1,ch*2.1);
+  }
+  ctx.restore();
+}
+function hueColor(h,a=1,l=55){
+  h=((h%1)+1)%1*360; return `hsla(${h}, 92%, ${l}%, ${a})`;
+}
+function drawSkeletons(){
+  ctx.save(); ctx.lineWidth=1;
+  for(const o of organisms){ if(!o.alive) continue; const col=hueColor(o.genome.hue,0.22,62); ctx.strokeStyle=col;
+    for(const c of o.cells){ ctx.beginPath(); ctx.moveTo(o.x,o.y); ctx.lineTo(c.x,c.y); ctx.stroke(); }
+  }
+  ctx.restore();
+}
+function drawCells(){
+  ctx.save();
+  for(const o of organisms){ if(!o.alive) continue; const selected=o.id===selectedOrgId; for(const c of o.cells){
+      ctx.strokeStyle=selected?'rgba(255,211,111,.80)':hueColor(o.genome.hue + c.type*0.08, 0.34, 62);
+      ctx.lineWidth=selected?2.2:1.2; ctx.beginPath(); ctx.arc(c.x,c.y,Math.max(4,c.radius*o.expandAction),0,TAU); ctx.stroke();
+      if(c.integrity<0.35){ ctx.strokeStyle='rgba(255,89,104,.55)'; ctx.beginPath(); ctx.arc(c.x,c.y,c.radius*1.25,0,TAU); ctx.stroke(); }
+    }}
+  ctx.restore();
+}
+function drawParticles(){
+  ctx.save();
+  for(const p of particles){
+    const o=organisms.find(x=>x.id===p.orgId); if(!o||!o.alive) continue;
+    const h=o.genome.hue + p.cellType*0.075 + p.role*0.018;
+    const a=(p.role===0?0.70:p.role===1?0.85:0.95);
+    ctx.fillStyle=hueColor(h,a,p.role===2?67:56);
+    const r=p.role===1?2.0:(p.role===2?1.8:1.4);
+    ctx.fillRect(p.x-r/2,p.y-r/2,r,r);
+  }
+  ctx.restore();
+}
+function drawArrow(x,y,vx,vy,color,label,scale=58){
+  const m=Math.hypot(vx,vy); if(m<0.04) return;
+  const ex=x+vx*scale, ey=y+vy*scale;
+  ctx.save(); ctx.strokeStyle=color; ctx.fillStyle=color; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(ex,ey); ctx.stroke();
+  const a=Math.atan2(vy,vx);
+  ctx.beginPath(); ctx.moveTo(ex,ey); ctx.lineTo(ex-Math.cos(a-.55)*8,ey-Math.sin(a-.55)*8); ctx.lineTo(ex-Math.cos(a+.55)*8,ey-Math.sin(a+.55)*8); ctx.closePath(); ctx.fill();
+  ctx.font='10px ui-monospace, monospace'; ctx.textAlign='center'; ctx.fillText(label,ex,ey-7);
+  ctx.restore();
+}
+function drawSelection(){
+  const sel=organisms.find(o=>o.id===selectedOrgId);
+  if(!sel) return;
+  ctx.save(); ctx.strokeStyle='rgba(255,211,111,.9)'; ctx.lineWidth=2; ctx.setLineDash([6,5]);
+  ctx.beginPath(); ctx.arc(sel.x,sel.y,56+Math.sin(time*.06)*4,0,TAU); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle='rgba(255,211,111,.9)'; ctx.font='11px ui-monospace, monospace'; ctx.textAlign='center'; ctx.fillText(sel.genome.name,sel.x,sel.y-64);
+  ctx.restore();
+  const s=sel.lastSensors||[];
+  drawArrow(sel.x,sel.y,s[2]||0,s[3]||0,'rgba(255,211,111,.90)','target');
+  drawArrow(sel.x,sel.y,s[4]||0,s[5]||0,'rgba(111,252,255,.90)','food');
+  drawArrow(sel.x,sel.y,s[6]||0,s[7]||0,'rgba(255,89,104,.90)','hazard');
+  drawArrow(sel.x,sel.y,s[21]||0,s[22]||0,'rgba(255,79,216,.88)','wall',48);
+  drawArrow(sel.x,sel.y,sel.motorX||0,sel.motorY||0,'rgba(116,255,156,.92)','motor',65);
+}
+function drawMatrix(){
+  const g=(organisms.find(o=>o.id===selectedOrgId)?.genome) || championGenome || organisms[0]?.genome;
+  if(!g) return;
+  championGenome=g;
+  const size=mCanvas.width, cs=size/KIND_COUNT;
+  mctx.clearRect(0,0,size,size); mctx.fillStyle='#020805'; mctx.fillRect(0,0,size,size);
+  for(let y=0;y<KIND_COUNT;y++)for(let x=0;x<KIND_COUNT;x++){
+    const p=idx(y,x); const s=g.strengths[p], r=g.radii[p];
+    const mag=clamp(Math.abs(s)/0.12,0,1);
+    const rad=clamp(r/150,0,1);
+    const color=s>=0?`rgba(80,255,160,${0.18+mag*.75})`:`rgba(255,70,210,${0.16+mag*.75})`;
+    mctx.fillStyle=color; mctx.fillRect(x*cs+1,y*cs+1,cs-2,cs-2);
+    mctx.strokeStyle=`rgba(255,211,111,${0.10+rad*.45})`; mctx.lineWidth=1;
+    const inset=(1-rad)*cs*.36; mctx.strokeRect(x*cs+inset,y*cs+inset,cs-inset*2,cs-inset*2);
+  }
+  mctx.strokeStyle='rgba(111,252,255,.65)'; mctx.lineWidth=1.4;
+  for(let k=1;k<CELL_TYPES;k++){ const p=k*ROLES_PER_CELL*cs; mctx.beginPath(); mctx.moveTo(p,0); mctx.lineTo(p,size); mctx.moveTo(0,p); mctx.lineTo(size,p); mctx.stroke(); }
+  if(hoverMatrix){
+    mctx.strokeStyle='#ffd36f'; mctx.lineWidth=2; mctx.strokeRect(hoverMatrix.x*cs+1,hoverMatrix.y*cs+1,cs-2,cs-2);
+    const p=idx(hoverMatrix.y,hoverMatrix.x);
+    document.getElementById('matrixInfo').innerHTML = `<b>${roleName(hoverMatrix.y)} ← ${roleName(hoverMatrix.x)}</b><br>`+
+      `strength: <span style="color:#ffd36f">${g.strengths[p].toFixed(4)}</span><br>`+
+      `radius: <span style="color:#ffd36f">${g.radii[p].toFixed(1)} px</span><br><br>`+
+      `wheel: nudge strength<br>shift+wheel: nudge radius<br><span class="tiny">Rows are affected particles. Columns are source particles.</span>`;
+  } else {
+    document.getElementById('matrixInfo').innerHTML = `Selected genome: <b>${g.name}</b><br>`+
+      `${g.body.length} cells · ${g.genes.length} brain genes<br><br>`+
+      `Blocks: α, β, γ cell-type domains.<br>`+
+      `<span style="color:#74ff9c">green/cyan</span> attracts · <span style="color:#ff4fd8">magenta</span> repels.<br>`+
+      `<span class="tiny">Inner rectangle size encodes interaction radius.</span>`;
+  }
+}
+function renderCards(){
+  const cards=document.getElementById('cards'); cards.innerHTML='';
+  const list=topSnapshot.length?topSnapshot:organisms.slice(0,6).map(o=>({id:o.id,genome:o.genome,fitness:o.finalFitness||0,score:o.score,reached:o.reached,integrity:o.integrity,energy:o.energy,cells:o.cells.length,reason:o.deathReason}));
+  for(const item of list){
+    const div=document.createElement('div'); div.className='card'+(item.id===selectedOrgId?' sel':'');
+    const fit=Math.max(0,item.fitness||0); const pct=clamp(fit/Math.max(1,lastBest||fit||1),0,1)*100;
+    div.innerHTML=`<div class="cardName">${item.genome.name}</div><div class="bar"><i style="width:${pct}%"></i></div>`+
+      `<span class="pill">fit ${fit.toFixed(1)}</span><span class="pill">cells ${item.cells}</span><span class="pill">wp ${item.reached}</span>`+
+      `<div class="tiny">E ${item.energy.toFixed(2)} · I ${item.integrity.toFixed(2)} ${item.reason?`· ${item.reason}`:''}</div>`;
+    div.onclick=()=>{ selectedOrgId=item.id; championGenome=item.genome; renderCards(); drawMatrix(); };
+    cards.appendChild(div);
+  }
+}
+function updateHud(){
+  const alive=organisms.filter(o=>o.alive).length;
+  const scores=organisms.map(o=>o.finalFitness||o.score||0);
+  const avg=scores.reduce((a,b)=>a+b,0)/Math.max(1,scores.length);
+  const best=Math.max(...scores,0);
+  document.getElementById('rGen').textContent=generation;
+  document.getElementById('rStep').textContent=`${simStep}/${settings.stepsPerGeneration}`;
+  document.getElementById('rAlive').textContent=alive;
+  document.getElementById('rBest').textContent=(generation?lastBest:best).toFixed(2);
+  document.getElementById('rAvg').textContent=(generation?lastAvg:avg).toFixed(2);
+  document.getElementById('rDiv').textContent=lastDiversity.toFixed(3);
+  updateInspector();
+  drawBrain();
+  if(!settings.hints){ document.getElementById('shipLine').textContent='hints disabled'; return; }
+  let msg='The chamber is selecting for heritable bodies: chemistry maintains cells, brains steer them, arenas kill weak recipes.';
+  if(alive===0) msg='All specimens are dead. The next generation will breed from best historical scores, not from moral worth. Evolution is brutal and lazy.';
+  else if(lastDiversity<0.01 && generation>5) msg='Genetic diversity is collapsing. Raise mutation, lower selection pressure, or inject seeded/random genomes.';
+  else if(arena.type==='maze') msg='Labyrinth pressure rewards navigation, compact bodies, and body integrity near walls.';
+  else if(arena.type==='glyphs') msg='Sequence pressure rewards memory-ish controller loops: organisms must visit glyphs in order.';
+  else if(arena.type==='toxic') msg='Toxic spiral pressure rewards hazard gradients, compact cells, and not over-thrashing motor particles.';
+  else if(arena.type==='gate') msg='Moving gate pressure rewards wall sensors, timing, compact bodies, and lower thrashing through bottlenecks.';
+  else if(arena.type==='wheel') msg='Hazard wheel pressure rewards oscillator timing: target-seeking alone collides with rotating poison.';
+  else if(arena.type==='forage') msg='Sparse forager pressure hides target sensors; food gradients, energy thrift, and exploration now matter.';
+  else if(arena.type==='trap') msg='Baited core is deceptive: direct core attraction is useful only if hazard avoidance finds the gaps.';
+  else if(arena.type==='relay') msg='Signal relay requires navigation plus emit-signal near waypoints; watch the emit action in telemetry.';
+  const sel=organisms.find(o=>o.id===selectedOrgId);
+  if(sel) msg += ` Selected ${sel.genome.name}: cells ${sel.cells.length}, genes ${sel.genome.genes.length}, integrity ${sel.integrity.toFixed(2)}.`;
+  document.getElementById('shipLine').textContent=msg;
+}
+function meterHTML(name,v,min=-1,max=1){
+  const pct=clamp((v-min)/(max-min),0,1)*100;
+  const txt=(Math.abs(v)>=10?v.toFixed(1):v.toFixed(3));
+  return `<div class="meterRow"><div class="meterName"><span>${name}</span><span>${txt}</span></div><div class="meterTrack"><i class="meterFill" style="width:${pct}%"></i></div></div>`;
+}
+function updateInspector(){
+  const sel=organisms.find(o=>o.id===selectedOrgId) || organisms[0];
+  const sensorEl=document.getElementById('sensorList'), actionEl=document.getElementById('actionList'), geneEl=document.getElementById('geneList');
+  if(!sel || !sel.lastSensors){ sensorEl.innerHTML=''; actionEl.innerHTML=''; geneEl.innerHTML='<div class="tiny">Run a few steps or select a live organism.</div>'; return; }
+  const sensorPairs=sel.lastSensors.map((v,i)=>({name:SENSOR_NAMES[i]||`s${i}`,v})).sort((a,b)=>Math.abs(b.v)-Math.abs(a.v)).slice(0,12);
+  sensorEl.innerHTML=sensorPairs.map(x=>meterHTML(x.name,x.v)).join('');
+  const actionVals=(sel.lastActions||[]).map((v,i)=>({name:ACTION_NAMES[i]||`a${i}`,v}));
+  actionEl.innerHTML=actionVals.map(x=>meterHTML(x.name,x.v, x.name==='cohere'||x.name==='expand'?0: -1, x.name==='cohere'?2.2:(x.name==='expand'?1.5:1))).join('');
+  const genes=sel.lastBrainContribs||[];
+  geneEl.innerHTML=genes.slice(0,8).map(g=>{
+    const src=g.srcType===0 ? (SENSOR_NAMES[g.src%SENSOR_NAMES.length]||`s${g.src}`) : `n${g.src%MAX_NEURONS}`;
+    const dst=ACTION_NAMES[g.dst%ACTION_NAMES.length]||`a${g.dst}`;
+    const sign=g.contribution>=0?'+':'−';
+    return `<div class="geneLine"><b>${src}</b> → ${dst} · w ${g.weight.toFixed(2)} · ${sign}${Math.abs(g.contribution).toFixed(3)}</div>`;
+  }).join('') || '<div class="tiny">No action genes active yet.</div>';
+}
+function drawBrain(){
+  const sel=organisms.find(o=>o.id===selectedOrgId) || organisms[0];
+  if(!sel || !brainCanvas) return;
+  const w=brainCanvas.width, h=brainCanvas.height;
+  bctx.clearRect(0,0,w,h); bctx.fillStyle='#010604'; bctx.fillRect(0,0,w,h);
+  bctx.font='9px ui-monospace, monospace'; bctx.textAlign='left';
+  bctx.fillStyle='rgba(116,255,156,.9)'; bctx.fillText('SENSORS',8,13); bctx.fillText('RECURRENT NODES',126,13); bctx.fillText('ACTIONS',242,13);
+  const sensors=(sel.lastSensors||[]).map((v,i)=>({i,v,name:SENSOR_NAMES[i]||`s${i}`})).sort((a,b)=>Math.abs(b.v)-Math.abs(a.v)).slice(0,7);
+  const sy=[]; sensors.forEach((s,i)=>{ const y=30+i*18; sy[s.i]=y; bctx.fillStyle='rgba(215,255,230,.82)'; bctx.fillText(s.name,8,y+3); bctx.fillStyle=s.v>=0?'rgba(116,255,156,.8)':'rgba(255,79,216,.8)'; bctx.beginPath(); bctx.arc(82,y,3+Math.abs(s.v)*3,0,TAU); bctx.fill(); });
+  const ny=[]; for(let i=0;i<MAX_NEURONS;i++){ const x=145+(i%2)*38, y=32+Math.floor(i/2)*30; ny[i]=[x,y]; const v=sel.neurons[i]||0; bctx.strokeStyle=v>=0?'rgba(111,252,255,.75)':'rgba(255,79,216,.75)'; bctx.lineWidth=1+Math.abs(v)*2; bctx.beginPath(); bctx.arc(x,y,7,0,TAU); bctx.stroke(); bctx.fillStyle='rgba(127,174,148,.9)'; bctx.fillText('n'+i,x-7,y+20); }
+  const ay=[]; for(let i=0;i<ACTION_NAMES.length;i++){ const y=28+i*16; ay[i]=y; const v=(sel.lastActions||[])[i]||0; bctx.fillStyle='rgba(215,255,230,.82)'; bctx.fillText(ACTION_NAMES[i],244,y+3); bctx.fillStyle=v>=0?'rgba(116,255,156,.8)':'rgba(255,79,216,.8)'; bctx.fillRect(232,y-5,Math.min(28,Math.abs(v)*18),5); }
+  for(const g of (sel.lastBrainContribs||[]).slice(0,18)){
+    const isSensor=g.srcType===0;
+    const x1=isSensor?86:(ny[g.src%MAX_NEURONS]?.[0]||164);
+    const y1=isSensor?(sy[g.src%SENSOR_NAMES.length]||85):(ny[g.src%MAX_NEURONS]?.[1]||85);
+    const x2=232, y2=ay[g.dst%ACTION_NAMES.length]||85;
+    bctx.strokeStyle=g.contribution>=0?'rgba(116,255,156,.40)':'rgba(255,79,216,.40)';
+    bctx.lineWidth=0.6+Math.min(3.5,Math.abs(g.contribution)*2.4);
+    bctx.beginPath(); bctx.moveTo(x1,y1); bctx.bezierCurveTo(130,y1,190,y2,x2,y2); bctx.stroke();
+  }
+}
+function exportChampion(){
+  const g=championGenome || organisms[0]?.genome; if(!g) return;
+  const data={
+    app:'XenoCell Genesis prototype', generation, arena:arena?.name, genome:{...g,
+      radii:Array.from(g.radii), strengths:Array.from(g.strengths)
+    }, note:'Rows in strengths/radii are affected role, columns are source role. Cell roles are α/β/γ × membrane/core/motor.'
+  };
+  const txt=JSON.stringify(data,null,2);
+  if(navigator.clipboard) navigator.clipboard.writeText(txt).then(()=>alert('Champion genome copied to clipboard.')).catch(()=>downloadTxt(txt));
+  else downloadTxt(txt);
+}
+function downloadTxt(txt){
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([txt],{type:'application/json'})); a.download='xenocell-champion.json'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+
+function loop(t){
+  rafLast=t;
+  if(!paused){ for(let i=0;i<settings.speed;i++) physicsStep(); }
+  draw();
+  requestAnimationFrame(loop);
+}
+
+resetPopulation(true);
+requestAnimationFrame(loop);
+setInterval(()=>{ drawMatrix(); renderCards(); }, 1000);
+
+})();
+</script>
+</body>
+</html>
