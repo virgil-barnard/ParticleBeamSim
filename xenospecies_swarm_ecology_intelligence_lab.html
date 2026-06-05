@@ -1,0 +1,1754 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+<title>XenoSpecies Swarm Evolution — Ecology Intelligence Lab</title>
+<style>
+:root{
+  --bg:#010302; --panel:#06100de8; --panel2:#020806ee; --grid:#173d31;
+  --green:#79ff9f; --cyan:#70f7ff; --amber:#ffd36f; --mag:#ff4fd8; --red:#ff5d73;
+  --text:#d8ffe7; --muted:#7eaa94;
+}
+html,body{height:100%;margin:0;background:radial-gradient(circle at 50% 30%,#092015,#010302 72%);overflow:hidden;color:var(--text);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;}
+canvas{display:block;touch-action:none;}
+#gpu,#overlay{position:fixed;inset:0;width:100vw;height:100dvh;}
+#overlay{pointer-events:none;}
+.scan:after{content:"";position:fixed;inset:0;pointer-events:none;background:linear-gradient(rgba(255,255,255,.035) 50%,rgba(0,0,0,.04) 50%);background-size:100% 4px;mix-blend-mode:overlay;opacity:.5;}
+.panel{position:fixed;background:linear-gradient(180deg,#06140ff0,#020806f2);border:1px solid #2cff8c88;box-shadow:0 0 24px #00ff8a24,inset 0 0 16px #00ff7a12;backdrop-filter:blur(7px);z-index:5;}
+#hud{left:14px;top:14px;width:356px;padding:12px;}
+#lab{right:14px;top:14px;width:390px;max-height:calc(100dvh - 28px);overflow:auto;padding:12px;}
+#matrixDock{left:14px;bottom:14px;width:356px;padding:12px;}
+#cards{position:fixed;left:392px;right:426px;bottom:14px;height:122px;display:flex;gap:8px;z-index:4;pointer-events:auto;}
+#analytics{right:14px;bottom:152px;width:390px;padding:12px;}
+#champions{right:14px;bottom:152px;width:390px;padding:12px;max-height:420px;overflow:auto;}
+#historyView{width:100%;height:142px;border:1px solid #1f6c49;background:#010604;display:block;margin:7px 0;}
+#analyticsTable{max-height:210px;overflow:auto;border:1px solid #174130;background:#020806;margin-top:6px;}
+#championList{max-height:320px;overflow:auto;border:1px solid #174130;background:#020806;margin-top:8px;}
+.champRow{display:grid;grid-template-columns:44px 1fr 58px 62px;gap:6px;align-items:center;border-bottom:1px solid #123326;padding:5px;font-size:10px;color:#bfffd4;}
+.champRow button{padding:3px 4px;font-size:9px;}
+.specRow{display:grid;grid-template-columns:42px 1fr 50px 44px 44px 44px 72px;gap:6px;align-items:center;border-bottom:1px solid #123326;padding:4px 5px;font-size:10px;color:#bfffd4;}
+.specRow.head{position:sticky;top:0;background:#04110b;color:#ffd36f;text-transform:uppercase;letter-spacing:.06em;}
+.specSwatch{display:inline-block;width:9px;height:9px;border-radius:50%;box-shadow:0 0 8px currentColor;margin-right:3px;}
+.title{color:var(--green);letter-spacing:.13em;font-weight:900;font-size:14px;text-transform:uppercase;margin-bottom:8px;text-shadow:0 0 9px #00ff80aa;}
+.sub{font-size:11px;color:var(--muted);line-height:1.38;}
+.row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:7px 0;}
+.row label{font-size:12px;color:#c7ffd9;}
+button,select,input[type="number"],input[type="text"]{font:inherit;color:var(--text);background:#04110b;border:1px solid #2cff8c80;padding:6px 8px;outline:none;box-shadow:inset 0 0 10px #00ff7a12;}
+button{cursor:pointer;text-transform:uppercase;letter-spacing:.06em;font-size:11px;}
+button:hover{background:#092317;box-shadow:0 0 12px #00ff8055,inset 0 0 12px #00ff8030;}
+button.active{background:#0a2e1e;border-color:var(--cyan);color:var(--cyan);box-shadow:0 0 18px #00faff55,inset 0 0 14px #00faff25;}
+select{width:100%;}
+input[type="range"]{width:178px;accent-color:#52ff91;}
+.value{color:var(--amber);min-width:62px;text-align:right;font-size:12px;}
+.btnGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:8px 0;}
+.readouts{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin:8px 0 6px;}
+.metric{border:1px solid #1f6c49;background:#03110b;padding:6px 6px 5px;min-height:34px;}
+.metric b{display:block;color:var(--cyan);font-size:15px;font-weight:900;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.metric span{display:block;color:#84b99b;font-size:9px;text-transform:uppercase;letter-spacing:.08em;margin-top:3px;}
+details{border-top:1px dashed #1f6c49;padding-top:8px;margin-top:8px;}
+summary{cursor:pointer;color:var(--cyan);text-transform:uppercase;font-size:12px;letter-spacing:.08em;}
+#shipLine{border:1px solid #214d39;background:#021008;color:#baffcd;padding:7px;min-height:34px;font-size:11px;line-height:1.35;margin-top:7px;}
+#matrix{width:264px;height:264px;border:1px solid #2cff8c88;background:#020805;image-rendering:pixelated;}
+#matrixWrap{display:flex;gap:10px;align-items:flex-start;}
+#matrixInfo{font-size:11px;color:#bfffd4;line-height:1.45;flex:1;min-height:200px;}
+#brainView{width:100%;height:300px;border:1px solid #1f6c49;background:#010604;display:block;margin:7px 0;}
+.card{flex:1;min-width:86px;border:1px solid #1d5d42;background:#04100bdc;padding:7px;box-shadow:inset 0 0 10px #00ff6011;cursor:pointer;overflow:hidden;}
+.card:hover,.card.sel{border-color:var(--cyan);box-shadow:0 0 12px #00ffff44,inset 0 0 10px #00ffff18;}
+.cardName{font-size:11px;color:var(--green);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.bar{height:5px;background:#092417;margin:5px 0;overflow:hidden;border:1px solid #174130;}
+.bar>i{display:block;height:100%;background:linear-gradient(90deg,var(--green),var(--cyan));}
+.pill{display:inline-block;border:1px solid #236146;color:#a9ffc4;padding:1px 5px;margin:1px 2px 1px 0;font-size:9px;}
+.meterList{display:grid;grid-template-columns:1fr 1fr;gap:4px 8px;margin:6px 0;}
+.meterRow{font-size:10px;color:#bfffd4;}
+.meterName{display:flex;justify-content:space-between;gap:5px;white-space:nowrap;}
+.meterTrack{height:5px;background:#061b12;border:1px solid #174130;position:relative;overflow:hidden;}
+.meterTrack:before{content:"";position:absolute;left:50%;top:0;bottom:0;width:1px;background:#2cff8c66;}
+.meterFill{display:block;height:100%;width:0%;background:linear-gradient(90deg,#ff4fd8,#ffd36f,#74ff9c,#6ffcff);}
+.geneLine{font-size:10px;color:#9fdcb4;border-top:1px dotted #174130;padding:2px 0;}
+.geneLine b{color:#ffd36f;}
+.legendRow{display:flex;flex-wrap:wrap;gap:5px;margin:5px 0;}
+.tiny{font-size:10px;color:#86bda0;}
+.warning{color:var(--amber);}.danger{color:var(--red);}.hidden{display:none!important;}
+.matrixTools{border-top:1px dashed #1f6c49;margin-top:9px;padding-top:8px;}
+.matrixTools .row{margin:5px 0;}
+.matrixTools select{font-size:11px;}
+.microGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-top:6px;}
+.microGrid button{padding:5px 4px;font-size:10px;}
+#selectedPairBox{border:1px solid #214d39;background:#021008;color:#baffcd;padding:6px;margin-top:6px;font-size:10px;line-height:1.4;}
+
+.panelBar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;}
+.panelBar .title{margin:0;}
+.minBtn{min-width:28px;padding:3px 6px;border-color:#2cff8c66;color:#86ffc0;background:#020806;}
+.panel.collapsed{width:auto!important;height:auto!important;max-height:none!important;overflow:hidden!important;padding:8px 10px!important;}
+.panel.collapsed>:not(.panelBar){display:none!important;}
+.hiddenPanel{display:none!important;}
+#cards.hiddenPanel{display:none!important;}
+#cards.compact{height:34px;overflow:hidden;}
+#cards.compact .card{display:none;}
+#cards.compact:before{content:'SPECIMENS MINIMIZED';display:block;border:1px solid #1d5d42;background:#04100bdc;color:#79ff9f;padding:8px 10px;font-size:11px;letter-spacing:.12em;}
+#customTools{border:1px dashed #1f6c49;background:#020806;padding:7px;margin-top:7px;}
+#customTools .row input[type="number"]{width:84px;}
+#customStatus{border:1px solid #214d39;background:#021008;color:#baffcd;padding:6px;margin-top:6px;font-size:10px;line-height:1.4;}
+.zoneSelected{color:#ffd36f;}
+
+
+#boot{position:fixed;inset:0;background:#000d;display:flex;align-items:center;justify-content:center;z-index:20;}
+#bootBox{width:min(560px,calc(100vw - 28px));padding:18px;border:1px solid #2cff8caa;background:#020b07;box-shadow:0 0 30px #00ff8070;}
+@media(max-width:980px){#lab{right:8px;left:8px;top:auto;bottom:8px;width:auto;max-height:46dvh;}#hud{left:8px;top:8px;width:calc(100vw - 40px);}#matrixDock,#cards,#analytics,#champions{display:none;}}
+</style>
+</head>
+<body class="scan">
+<canvas id="gpu"></canvas>
+<canvas id="overlay"></canvas>
+<div id="boot"><div id="bootBox"><div class="title">XENOSPECIES :: ECOLOGY INTELLIGENCE LAB</div><div class="sub" id="bootText">Requesting WebGPU adapter...</div></div></div>
+
+<section id="hud" class="panel hidden">
+  <div class="title">XENOSPECIES :: ECOLOGY INTELLIGENCE</div>
+  <div class="readouts">
+    <div class="metric"><b id="rGen">0</b><span>generation</span></div>
+    <div class="metric"><b id="rStep">0</b><span>step</span></div>
+    <div class="metric"><b id="rPart">0</b><span>particles</span></div>
+    <div class="metric"><b id="rBest">0.00</b><span>best species</span></div>
+    <div class="metric"><b id="rAvg">0.00</b><span>avg species</span></div>
+    <div class="metric"><b id="rDiv">0.00</b><span>diversity</span></div>
+  </div>
+  <div class="btnGrid">
+    <button id="bPause">pause</button>
+    <button id="bNext">next gen</button>
+    <button id="bReset">reset</button>
+    <button id="bSeed">seeded</button>
+    <button id="bExport">export</button>
+    <button id="bHelp">hints</button>
+    <button id="bLab">lab</button>
+    <button id="bMatrix">matrix</button>
+    <button id="bCards">cards</button>
+    <button id="bStats">stats</button>
+    <button id="bVault">vault</button>
+  </div>
+  <div id="shipLine">Booting species-level nervous substrate...</div>
+</section>
+
+<section id="lab" class="panel hidden">
+  <div class="title">EVOLUTION CHAMBER</div>
+  <div class="row"><label>Arena</label><select id="arenaSel"></select></div>
+  <details open>
+    <summary>Curriculum lane</summary>
+    <div class="sub">Arenas are ordered from nursery-safe to harsher selective pressure. Use Next/Prev Lesson to move a trained ecosystem forward without throwing it straight into extinction-grade maps. Auto mode now loops back to lesson 01 after the final lesson.</div>
+    <div class="row"><label>Auto advance</label><button id="curriculumBtn">off</button></div>
+    <div class="row"><label>Loop curriculum</label><button id="curriculumLoopBtn">on</button></div>
+    <div class="row"><label>Generations / lesson</label><input id="lessonGens" type="range" min="5" max="300" step="5"><span id="lessonGensV" class="value"></span></div>
+    <div class="btnGrid"><button id="prevLesson">prev lesson</button><button id="nextLesson">next lesson</button><button id="restartArena">respawn arena</button></div>
+  </details>
+  <div class="row"><label>Total particles</label><input id="particles" type="range" min="512" max="32768" step="512"><span id="particlesV" class="value"></span></div>
+  <div class="row"><label>Species count</label><input id="speciesCount" type="range" min="2" max="12" step="1"><span id="speciesCountV" class="value"></span></div>
+  <div class="row"><label>Neural variants / species</label><input id="variantCount" type="range" min="1" max="8" step="1"><span id="variantCountV" class="value"></span></div>
+  <div class="row"><label>Variant perturbation</label><input id="variantMut" type="range" min="0" max="0.18" step="0.002"><span id="variantMutV" class="value"></span></div>
+  <div class="row"><label>Interaction samples</label><input id="samples" type="range" min="16" max="768" step="16"><span id="samplesV" class="value"></span></div>
+  <div class="row"><label>Steps / generation</label><input id="stepsGen" type="range" min="180" max="60000" step="60"><span id="stepsGenV" class="value"></span></div>
+  <div class="row"><label>GPU ticks / frame</label><input id="speed" type="range" min="1" max="16" step="1"><span id="speedV" class="value"></span></div>
+  <div class="row"><label>Time step</label><input id="dt" type="range" min="0.001" max="1" step="0.001"><span id="dtV" class="value"></span></div>
+  <div class="row"><label>Velocity damping</label><input id="friction" type="range" min="0.5" max="1.02" step="0.001"><span id="frictionV" class="value"></span></div>
+  <div class="row"><label>Force scale</label><input id="forceScale" type="range" min="0" max="6" step="0.05"><span id="forceScaleV" class="value"></span></div>
+  <div class="row"><label>Mutation rate</label><input id="mut" type="range" min="0" max="0.35" step="0.005"><span id="mutV" class="value"></span></div>
+  <div class="row"><label>Selection fraction</label><input id="selFrac" type="range" min="0.05" max="0.70" step="0.01"><span id="selFracV" class="value"></span></div>
+  <div class="row"><label>Sexual crossover</label><button id="crossBtn">on</button></div>
+  <div class="row"><label>Warm-start brains</label><button id="warmBtn">on</button></div>
+  <details open>
+    <summary>Chemistry evolution</summary>
+    <div class="sub">The relationship matrix can either evolve with species lineages or stay locked while brains adapt around your manual force-field ecology.</div>
+    <div class="row"><label>Matrix evolves</label><button id="chemEvolveBtn">on</button></div>
+    <div class="row"><label>Matrix mutation</label><input id="chemMut" type="range" min="0" max="0.25" step="0.0025"><span id="chemMutV" class="value"></span></div>
+    <div class="row"><label>Elite chemistry protection</label><input id="chemProtect" type="range" min="0" max="1" step="0.01"><span id="chemProtectV" class="value"></span></div>
+    <div class="row"><label>Force-sense gain</label><input id="forceSense" type="range" min="0.1" max="5" step="0.05"><span id="forceSenseV" class="value"></span></div>
+    <div class="row"><label>Motor energy cost</label><input id="motorCost" type="range" min="0" max="8" step="0.05"><span id="motorCostV" class="value"></span></div>
+  </details>
+  <details open>
+    <summary>View</summary>
+    <div class="row"><label>Matrix hover spotlight</label><button id="highlightBtn">on</button></div>
+    <div class="row"><label>Environment overlay</label><button id="envBtn">on</button></div>
+    <div class="row"><label>Particle snapshot trails</label><button id="trailBtn">off</button></div>
+  </details>
+  <details open>
+    <summary>Pheromone fields</summary>
+    <div class="sub">Particles can emit four species-tagged trail channels. Brains can sense each source species' trail gradients and decide which trails to follow, ignore, exploit, or poison.</div>
+    <div class="row"><label>Trail sensing</label><input id="trailSense" type="range" min="0" max="6" step="0.05"><span id="trailSenseV" class="value"></span></div>
+    <div class="row"><label>Trail emission</label><input id="trailEmit" type="range" min="0" max="6" step="0.05"><span id="trailEmitV" class="value"></span></div>
+    <div class="row"><label>Trail decay</label><input id="trailDecay" type="range" min="0.80" max="0.999" step="0.001"><span id="trailDecayV" class="value"></span></div>
+    <div class="row"><label>Trail overlay</label><button id="trailOverlayBtn">on</button></div>
+    <div class="row"><label>Overlay channel</label><select id="trailChannelSel"><option value="0">food</option><option value="1">danger</option><option value="2">kin</option><option value="3">territory</option></select></div>
+    <div class="row"><label>Overlay source</label><select id="trailSpeciesSel"><option value="-1">all species</option></select></div>
+    <div class="btnGrid"><button id="clearTrails">clear trails</button><button id="trailFoodBias">food hints</button><button id="trailDangerBias">danger hints</button></div>
+  </details>
+  <details>
+    <summary>Custom canvas editor</summary>
+    <div class="sub">Choose “00 Custom Canvas Lab”, enable edit mode, then place or drag survival objects directly on the field.</div>
+    <div id="customTools">
+      <div class="row"><label>Edit mode</label><button id="customEditBtn">off</button></div>
+      <div class="row"><label>Tool</label><select id="customTool">
+        <option value="select">select / move</option>
+        <option value="waypoint">place goal region</option>
+        <option value="food">place food well</option>
+        <option value="hazard">place hazard</option>
+        <option value="wall">place barrier</option>
+        <option value="erase">erase object</option>
+      </select></div>
+      <div class="row"><label>Radius / half width</label><input id="customRadius" type="range" min="8" max="180" step="2"><span id="customRadiusV" class="value"></span></div>
+      <div class="row"><label>Wall half height</label><input id="customWallH" type="range" min="8" max="240" step="2"><span id="customWallHV" class="value"></span></div>
+      <div class="row"><label>Reward / intensity</label><input id="customValue" type="range" min="0.1" max="400" step="0.1"><span id="customValueV" class="value"></span></div>
+      <div class="btnGrid"><button id="customBlank">blank</button><button id="customGarden">seed garden</button><button id="customClear">clear all</button></div>
+      <div id="customStatus">Custom editor idle. Tip: use select/move to drag objects; erase removes the nearest object.</div>
+    </div>
+  </details>
+  <details open>
+    <summary>Selected species brain</summary>
+    <div class="sub">Every particle runs the selected species' inherited neural policy in the GPU shader. Sensors are local scalar/vector readings; actions are motor outputs. Chemistry is the species×species attract/repel matrix.</div>
+    <canvas id="brainView" width="360" height="300"></canvas>
+    <div class="legendRow tiny"><span style="color:#ffd36f">target</span><span style="color:#6ffcff">food</span><span style="color:#ff5968">hazard</span><span style="color:#ff4fd8">wall</span><span style="color:#74ff9c">motor</span></div>
+    <div class="tiny">Representative live sensors</div><div id="sensorList" class="meterList"></div>
+    <div class="tiny">Representative live actions</div><div id="actionList" class="meterList"></div>
+    <div class="tiny">Strongest active wiring</div><div id="geneList"></div>
+  </details>
+  <details>
+    <summary>Model premise</summary>
+    <div class="sub">
+      This branch removes scaffolded cells. A species is now a population of particles. Each species evolves population share, neural controller variants, and optionally attraction/repulsion with every other species. Cell-like structures are expected to emerge from relationship chemistry plus particle-level motor economy rather than from assigned membranes.
+    </div>
+  </details>
+</section>
+
+<section id="matrixDock" class="panel hidden">
+  <div class="title">SPECIES RELATIONSHIP MATRIX</div>
+  <div id="matrixWrap">
+    <canvas id="matrix" width="264" height="264"></canvas>
+    <div id="matrixInfo">Rows = moving species. Columns = sensed neighbor species. Cyan attracts; magenta repels. Wheel over a cell to nudge strength. Shift+wheel nudges radius.</div>
+  </div>
+  <div id="selectedPairBox">No pair selected. Click a cell to pin it; hover previews.</div>
+  <div class="matrixTools">
+    <div class="row"><label>Preset</label><select id="matrixPresetSel">
+      <option value="soft">Soft mutual attraction</option>
+      <option value="self">Self-bind / other-neutral</option>
+      <option value="blocks">Symbiotic blocks</option>
+      <option value="predator">Predator-prey ring</option>
+      <option value="checker">Checker polarity</option>
+      <option value="random">Random balanced ecology</option>
+    </select></div>
+    <div class="microGrid">
+      <button id="applyMatrixPreset">apply</button><button id="symMatrix">sym</button><button id="invertMatrix">invert</button><button id="zeroMatrix">zero</button>
+      <button id="pairAttract">attract</button><button id="pairRepel">repel</button><button id="pairNeutral">neutral</button><button id="pairMirror">mirror</button>
+    </div>
+  </div>
+</section>
+<section id="analytics" class="panel hiddenPanel">
+  <div class="title">GENERATION ANALYTICS</div>
+  <div class="sub">Tracks per-generation survival, fitness, progress, and diversity. Use this to tell whether a species is genuinely adapting or merely surviving a forgiving lesson.</div>
+  <canvas id="historyView" width="360" height="142"></canvas>
+  <div class="readouts">
+    <div class="metric"><b id="rSurvive">0%</b><span>alive avg</span></div>
+    <div class="metric"><b id="rProgress">0.00</b><span>progress avg</span></div>
+    <div class="metric"><b id="rEnergy">0.00</b><span>energy avg</span></div>
+  </div>
+  <div id="analyticsTable"></div>
+</section>
+<section id="champions" class="panel hiddenPanel">
+  <div class="title">HALL OF CHAMPIONS</div>
+  <div class="sub">Champion snapshots preserve good nervous systems across arenas. Inject one into the selected species, or reseed the whole ecology with mutated descendants.</div>
+  <div class="btnGrid"><button id="saveSelectedChamp">save selected</button><button id="seedChampionPool">seed pool</button><button id="clearChampions">clear vault</button></div>
+  <div id="championList"></div>
+</section>
+<section id="cards"></section>
+
+<script type="module">
+'use strict';
+
+const gpuCanvas = document.getElementById('gpu');
+const overlay = document.getElementById('overlay');
+const octx = overlay.getContext('2d');
+const mCanvas = document.getElementById('matrix');
+const mctx = mCanvas.getContext('2d');
+const brainCanvas = document.getElementById('brainView');
+const bctx = brainCanvas.getContext('2d');
+const historyCanvas = document.getElementById('historyView');
+const hctx = historyCanvas.getContext('2d');
+const boot = document.getElementById('boot');
+const bootText = document.getElementById('bootText');
+
+const WORLD = { w: 1024, h: 640 };
+const MAX_SPECIES = 12;
+const MAX_VARIANTS = 8;
+const HIDDEN_COUNT = 12;
+const TRAIL_W = 64, TRAIL_H = 40, TRAIL_CHANNELS = 4;
+const TRAIL_NAMES = ['food','danger','kin','territory'];
+const ACTION_NAMES = ['move-x','move-y','social-gain','explore','eat-bias','pulse','chem-sail','brake','align-same','align-other','emit-food','emit-danger','emit-kin','emit-territory'];
+const ACTION_COUNT = ACTION_NAMES.length;
+const BASE_SENSOR_NAMES = ['loc-x','loc-y','target-x','target-y','food-x','food-y','hazard-x','hazard-y','wall-x','wall-y','energy','progress','same-near','other-near','vel-x','vel-y','osc','random','chem-x','chem-y','same-force-x','same-force-y','other-force-x','other-force-y','attract-field','repel-field','same-flow-x','same-flow-y','other-flow-x','other-flow-y'];
+const TRAIL_SENSOR_OFFSET = BASE_SENSOR_NAMES.length;
+const TRAIL_SENSOR_NAMES = [];
+for(let c=0;c<TRAIL_CHANNELS;c++) for(let s=0;s<MAX_SPECIES;s++) TRAIL_SENSOR_NAMES.push(`trail-${TRAIL_NAMES[c]}-S${s}-x`,`trail-${TRAIL_NAMES[c]}-S${s}-y`,`trail-${TRAIL_NAMES[c]}-v`);
+const FORCE_SENSOR_OFFSET = TRAIL_SENSOR_OFFSET + TRAIL_SENSOR_NAMES.length;
+const SENSOR_NAMES = [...BASE_SENSOR_NAMES, ...TRAIL_SENSOR_NAMES];
+for(let i=0;i<MAX_SPECIES;i++){ SENSOR_NAMES.push(`force-S${i}-x`,`force-S${i}-y`); }
+const SENSOR_COUNT = SENSOR_NAMES.length;
+const BRAIN_STRIDE = HIDDEN_COUNT * SENSOR_COUNT + HIDDEN_COUNT + ACTION_COUNT * (SENSOR_COUNT + HIDDEN_COUNT) + ACTION_COUNT;
+const PARTICLE_STRIDE = 9;
+const PAIR_STRIDE = 2;
+const SPECIES_STRIDE = 8;
+const ZONE_STRIDE = 8;
+const MAX_ZONES = 64;
+const TAU = Math.PI * 2;
+const ARENA_SEQUENCE = ['nursery','core','symbiosis','cooperate','dual','gradient','forage','corridor','split','glyphs','ring','trap','softgate','gate','pulse','bridge','sorting','maze','toxic','rain'];
+const ARENA_META = {
+  custom:{name:'00 Custom Canvas Lab',tier:'sandbox'},
+  nursery:{name:'01 Core Nursery',tier:'nursery'},
+  core:{name:'02 Reach Core Garden',tier:'nursery'},
+  symbiosis:{name:'03 Symbiosis Wells',tier:'gentle'},
+  cooperate:{name:'04 Cooperative Bloom Crucible',tier:'gentle'},
+  dual:{name:'05 Dual Sanctuary Wells',tier:'gentle'},
+  gradient:{name:'06 Gradient Forager',tier:'gentle'},
+  forage:{name:'07 Sparse Forager Desert',tier:'moderate'},
+  corridor:{name:'08 Open Corridor Run',tier:'moderate'},
+  split:{name:'09 Twin Sanctuary Split',tier:'moderate'},
+  glyphs:{name:'10 Visit Glyph Sequence',tier:'moderate'},
+  ring:{name:'11 Boundary Pilgrimage Ring',tier:'moderate'},
+  trap:{name:'12 Baited Core Trap',tier:'hard'},
+  softgate:{name:'13 Slow Gate Nursery',tier:'hard'},
+  gate:{name:'14 Moving Gate Gauntlet',tier:'hard'},
+  pulse:{name:'15 Pulsing Feast/Famine',tier:'hard'},
+  bridge:{name:'16 Narrow Bridge Covenant',tier:'very hard'},
+  sorting:{name:'17 Species Sorting Membrane',tier:'very hard'},
+  maze:{name:'18 Food Labyrinth',tier:'experimental'},
+  toxic:{name:'19 Toxic Spiral',tier:'experimental'},
+  rain:{name:'20 Predator Rain Field',tier:'experimental'}
+};
+const ARENA_NAMES = Object.fromEntries(Object.entries(ARENA_META).map(([k,v])=>[k,v.name]));
+const TYPE_WAYPOINT = 1, TYPE_FOOD = 2, TYPE_HAZARD = 3, TYPE_WALL = 4;
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+const randi=n=>Math.floor(Math.random()*n);
+const rand=(a=1,b=0)=>b+Math.random()*(a-b);
+const choice=a=>a[randi(a.length)];
+const gauss=()=>{let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(TAU*v);};
+const tanh=Math.tanh;
+const fmt=n=>Number.isFinite(n)?(Math.abs(n)>=1000?n.toFixed(0):n.toFixed(2)):'0';
+
+let settings = {
+  totalParticles: 8192,
+  speciesCount: 8,
+  variantCount: 4,
+  variantMutationRate: 0.035,
+  samples: 160,
+  stepsPerGeneration: 1800,
+  speed: 4,
+  dt: 0.04,
+  friction: 0.995,
+  forceScale: 2.2,
+  mutationRate: 0.075,
+  matrixMutationRate: 0.015,
+  chemistryProtection: 0.90,
+  selectionFrac: 0.26,
+  chemistryEvolves: false,
+  forceSenseScale: 1.0,
+  motorCost: 1.4,
+  trailSenseScale: 1.0,
+  trailEmitScale: 1.0,
+  trailDecay: 0.965,
+  showPheromones: true,
+  trailViewChannel: 0,
+  trailViewSpecies: -1,
+  crossover: true,
+  warmStart: true,
+  highlight: true,
+  showEnv: true,
+  trails: false,
+  hints: true,
+  curriculum: false,
+  curriculumLoop: true,
+  lessonGens: 50,
+  customEdit: false,
+  customTool: 'select',
+  customRadius: 46,
+  customWallH: 80,
+  customValue: 120,
+  arena: 'core'
+};
+
+let device, queue, ctx, format;
+let particleCount = settings.totalParticles;
+let speciesCount = settings.speciesCount;
+let species = [];
+let inter = new Float32Array(MAX_SPECIES * MAX_SPECIES * PAIR_STRIDE);
+let brainData = new Float32Array(MAX_SPECIES * MAX_VARIANTS * BRAIN_STRIDE);
+let speciesData = new Float32Array(MAX_SPECIES * SPECIES_STRIDE);
+let particles = new Float32Array(particleCount * PARTICLE_STRIDE);
+let zonesData = new Float32Array(MAX_ZONES * ZONE_STRIDE);
+let zoneList = [];
+let customZones = [];
+let selectedCustomZone = -1;
+let customDragIndex = -1;
+let arenaGenerationCount = 0;
+let generation = 0;
+let simStep = 0;
+let simTime = 0;
+let paused = false;
+let ending = false;
+let selectedSpecies = 0;
+let lastSnapshot = null;
+let lastStats = [];
+let lastBest = 0, lastAvg = 0, lastDiversity = 0;
+let history = [];
+let lastAliveAvg = 0, lastProgressAvg = 0, lastEnergyAvg = 0;
+let hoverCell = null;
+let selectedCell = null;
+let snapshotPending = false;
+let snapshotDue = 0;
+let nextGenRequested = false;
+let trailPoints = [];
+let trailDataBytes = TRAIL_W * TRAIL_H * TRAIL_CHANNELS * MAX_SPECIES * 4;
+let trailZero = new Uint32Array(TRAIL_W * TRAIL_H * TRAIL_CHANNELS * MAX_SPECIES);
+let lastTrailSnapshot = null;
+let trailPending = false;
+let trailFlip = false;
+let trailBufA, trailBufB, trailBG_AB, trailBG_BA, decayPipe;
+let trailLayout;
+let matrixUse = new Float32Array(MAX_SPECIES * MAX_SPECIES);
+let matrixUseMax = 1;
+let champions = [];
+let selectedChampion = -1;
+
+let pBytes = 0, bufA, bufB, currentBuffer, flip = false;
+let interBuf, brainBuf, speciesBuf, zoneBuf, simUBuf, renderUBuf;
+let compPipe, renderPipe;
+let compBG_A, compBG_B, simBG, renderBG_A, renderBG_B;
+let particleLayout, simLayout, renderLayout;
+
+function resizeCanvas(){
+  const dpr = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
+  for (const c of [gpuCanvas, overlay]) {
+    c.width = Math.floor(innerWidth * dpr);
+    c.height = Math.floor(innerHeight * dpr);
+    c.style.width = '100vw'; c.style.height = '100dvh';
+  }
+  octx.setTransform(overlay.width/WORLD.w,0,0,overlay.height/WORLD.h,0,0);
+}
+addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+function hueRgb(h){
+  h=((h%1)+1)%1;
+  const f=(n,k=(n+h*6)%6)=>1-Math.max(Math.min(k,4-k,1),0);
+  return [f(5),f(3),f(1)];
+}
+function fixedSpeciesHue(i){
+  // Keep visual color tied to the species slot, not the current lineage.
+  // This restores the old particle-life feel where every kind has a stable hue.
+  return ((i / Math.max(1, speciesCount)) % 1 + 1) % 1;
+}
+function speciesName(i){
+  const names=['Axiom','Beryl','Cinder','Dusk','Eon','Flux','Glyph','Halo','Ion','Jade','Kestrel','Lumen'];
+  return names[i%names.length] + '-' + String(i).padStart(2,'0');
+}
+function pairOffset(a,b){ return (a*MAX_SPECIES + b) * PAIR_STRIDE; }
+function brainOffsets(){
+  const W1 = 0;
+  const HB = W1 + HIDDEN_COUNT * SENSOR_COUNT;
+  const W2 = HB + HIDDEN_COUNT;
+  const AB = W2 + ACTION_COUNT * (SENSOR_COUNT + HIDDEN_COUNT);
+  return { W1, HB, W2, AB };
+}
+const BO = brainOffsets();
+
+function makeBrain(warm=false){
+  const b = new Float32Array(BRAIN_STRIDE);
+  for (let i=0;i<b.length;i++) if (Math.random()<0.12) b[i]=gauss()*0.35;
+  if (warm) {
+    // Action move-x reads target/food/hazard/wall x; move-y reads y counterparts.
+    const aw=(a,s,v)=>{ b[BO.W2 + a*(SENSOR_COUNT+HIDDEN_COUNT) + s] += v; };
+    aw(0,2,1.35); aw(1,3,1.35);
+    aw(0,4,0.95); aw(1,5,0.95);
+    aw(0,6,1.10); aw(1,7,1.10);
+    aw(0,8,1.25); aw(1,9,1.25);
+    aw(2,12,0.25); aw(2,13,0.45);
+    aw(0,18,0.35); aw(1,19,0.35);   // let brains notice the inherited chemistry current
+    aw(2,24,0.35); aw(2,25,-0.25);   // attraction/repulsion pressure modulates social gain
+    aw(4,10,-0.35); aw(4,4,0.55); aw(4,5,0.55);
+    aw(3,17,0.5); aw(5,16,0.45);
+    aw(6,18,0.42); aw(6,19,0.42);   // chem-sail notices incoming force current
+    aw(7,8,0.36); aw(7,9,0.36); aw(7,6,0.20); aw(7,7,0.20); // brake near walls/hazards
+    aw(8,26,0.22); aw(8,27,0.22); aw(9,28,0.16); aw(9,29,0.16); // flocking / social flow
+    // Gentle priors: follow food/kin trails, recoil from danger trails, and occasionally emit.
+    for(let qs=0; qs<MAX_SPECIES; qs++){
+      const food = TRAIL_SENSOR_OFFSET + (0*MAX_SPECIES + qs)*3;
+      const danger = TRAIL_SENSOR_OFFSET + (1*MAX_SPECIES + qs)*3;
+      const kin = TRAIL_SENSOR_OFFSET + (2*MAX_SPECIES + qs)*3;
+      aw(0,food,0.10); aw(1,food+1,0.10);
+      aw(0,danger,-0.11); aw(1,danger+1,-0.11);
+      aw(2,kin+2,0.04);
+    }
+    aw(10,4,0.18); aw(10,5,0.18); aw(11,6,0.20); aw(11,7,0.20); aw(12,12,0.16); aw(13,13,0.14);
+  }
+  return b;
+}
+function makeBrainVariants(warm=false, root=null){
+  const base = root ? new Float32Array(root) : makeBrain(warm);
+  const variants = [];
+  for(let v=0; v<MAX_VARIANTS; v++){
+    const b = v===0 ? new Float32Array(base) : mutateBrain(base, settings.variantMutationRate * (0.75 + Math.random()*0.75));
+    variants.push(b);
+  }
+  return variants;
+}
+function syncRepresentativeBrain(s){
+  s.brain = s.brainVariants?.[0] || s.brain || makeBrain(settings.warmStart);
+  return s;
+}
+function randomSpecies(i,warm=settings.warmStart){
+  const brainVariants = makeBrainVariants(warm);
+  return syncRepresentativeBrain({
+    id: i,
+    name: speciesName(i),
+    hue: fixedSpeciesHue(i),
+    motor: rand(0.95,0.45),
+    metab: rand(1.25,0.75),
+    noise: rand(0.6,0.05),
+    popWeight: rand(1.4,0.6),
+    lineage: 'G0',
+    parent: null,
+    fitness: 0,
+    avgScore: 0,
+    count: 0,
+    alive: 0,
+    variantFitness: Array(MAX_VARIANTS).fill(0),
+    brainVariants
+  });
+}
+function initEcosystem(seeded=true){
+  speciesCount = settings.speciesCount;
+  species = [];
+  for(let i=0;i<speciesCount;i++) species.push(randomSpecies(i, seeded && settings.warmStart));
+  inter.fill(0);
+  for(let a=0;a<MAX_SPECIES;a++) for(let b=0;b<MAX_SPECIES;b++) {
+    const o=pairOffset(a,b);
+    inter[o] = rand(105,24);
+    if (a===b) inter[o+1] = rand(0.65,-0.25);
+    else inter[o+1] = rand(0.75,-0.75);
+  }
+  generation = 0; simStep = 0; simTime = 0; arenaGenerationCount = 0;
+  selectedSpecies = 0;
+  refreshSpeciesBuffers();
+  spawnParticles();
+  uploadAll();
+  updateCards();
+  drawMatrix();
+}
+function refreshSpeciesBuffers(){
+  brainData.fill(0); speciesData.fill(0);
+  for(let i=0;i<speciesCount;i++){
+    syncRepresentativeBrain(species[i]);
+    for(let v=0; v<MAX_VARIANTS; v++){
+      const b = species[i].brainVariants?.[v] || species[i].brain;
+      brainData.set(b, (i*MAX_VARIANTS + v)*BRAIN_STRIDE);
+    }
+    const o=i*SPECIES_STRIDE;
+    species[i].hue = fixedSpeciesHue(i);
+    speciesData[o]=species[i].hue;
+    speciesData[o+1]=species[i].motor;
+    speciesData[o+2]=species[i].metab;
+    speciesData[o+3]=species[i].noise;
+    speciesData[o+4]=species[i].popWeight;
+    speciesData[o+5]=i*19.17+generation*0.01;
+    speciesData[o+6]=0;
+    speciesData[o+7]=1;
+  }
+}
+function arenaSpawnPoint(arena=settings.arena){
+  switch(arena){
+    case 'custom': return [rand(WORLD.w-100,100), rand(WORLD.h-100,100)];
+    case 'nursery': return [WORLD.w/2 + rand(260,-260), WORLD.h/2 + rand(180,-180)];
+    case 'dual': return [WORLD.w/2 + rand(140,-140), WORLD.h/2 + rand(120,-120)];
+    case 'gradient': return [rand(180,60), rand(WORLD.h-80,80)];
+    case 'corridor': return [rand(130,55), WORLD.h/2 + rand(150,-150)];
+    case 'softgate': return [rand(120,50), rand(560,80)];
+    case 'glyphs': return [rand(190,70), rand(540,100)];
+    case 'maze': return [rand(110,45), rand(560,80)];
+    case 'gate': return [rand(110,45), rand(560,80)];
+    case 'trap': { const ang=rand(TAU); return [WORLD.w/2 + Math.cos(ang)*rand(300,240), WORLD.h/2 + Math.sin(ang)*rand(200,150)]; }
+    case 'split': return [WORLD.w/2 + rand(80,-80), WORLD.h/2 + rand(80,-80)];
+    case 'ring': { const ang=rand(TAU); return [WORLD.w/2 + Math.cos(ang)*260, WORLD.h/2 + Math.sin(ang)*210]; }
+    default: return [rand(WORLD.w-80,80), rand(WORLD.h-80,80)];
+  }
+}
+function allocateCounts(){
+  const n=settings.totalParticles;
+  const weights = species.map(s => Math.max(0.05, s.popWeight) * Math.max(0.12, 0.35 + Math.max(0,s.fitness)/(Math.max(1,lastBest)||1)));
+  const totalW = weights.reduce((a,b)=>a+b,0) || 1;
+  let counts = weights.map(w=>Math.max(12, Math.floor(n*w/totalW)));
+  let sum=counts.reduce((a,b)=>a+b,0);
+  while(sum<n){ counts[randi(speciesCount)]++; sum++; }
+  while(sum>n){ const k=randi(speciesCount); if(counts[k]>4){counts[k]--; sum--;} }
+  return counts;
+}
+function spawnParticles(){
+  particleCount = settings.totalParticles;
+  particles = new Float32Array(particleCount * PARTICLE_STRIDE);
+  const counts = allocateCounts();
+  let p=0;
+  for(let s=0;s<speciesCount;s++){
+    species[s].count = counts[s];
+    for(let k=0;k<counts[s] && p<particleCount;k++,p++){
+      const [x,y]=arenaSpawnPoint();
+      const o=p*PARTICLE_STRIDE;
+      particles[o]=x; particles[o+1]=y;
+      particles[o+2]=rand(1.0,-1.0); particles[o+3]=rand(1.0,-1.0);
+      particles[o+4]=s; particles[o+5]=1.0; particles[o+6]=0; particles[o+7]=0; particles[o+8]=randi(Math.max(1,settings.variantCount));
+    }
+  }
+  while(p<particleCount){
+    const s=randi(speciesCount), [x,y]=arenaSpawnPoint(), o=p*PARTICLE_STRIDE;
+    particles[o]=x; particles[o+1]=y; particles[o+2]=rand(1,-1); particles[o+3]=rand(1,-1); particles[o+4]=s; particles[o+5]=1; particles[o+6]=0; particles[o+7]=0; particles[o+8]=randi(Math.max(1,settings.variantCount)); p++;
+  }
+}
+
+function addZone(arr,type,x,y,r,a,value=1,order=0,phase=0){
+  if(arr.length<MAX_ZONES) arr.push({type,x,y,r,a,value,order,phase});
+}
+function buildZones(arenaId,t){
+  const z=[]; const cx=WORLD.w/2, cy=WORLD.h/2;
+  if(arenaId==='custom'){
+    for(const cz of customZones){ addZone(z,cz.type,cz.x,cz.y,cz.r,cz.a,cz.value,cz.order,cz.phase); }
+  } else if(arenaId==='nursery'){
+    addZone(z,TYPE_WAYPOINT,cx,cy,78,0,120,0);
+    addZone(z,TYPE_FOOD,cx,cy,128,0,2.2,0);
+    for(let i=0;i<4;i++){const a=i*TAU/4+t*.035;addZone(z,TYPE_FOOD,cx+Math.cos(a)*230,cy+Math.sin(a)*150,42,0,1.0,0);}
+  } else if(arenaId==='core'){
+    addZone(z,TYPE_WAYPOINT,cx,cy,58,0,160,0);
+    addZone(z,TYPE_FOOD,cx,cy,92,0,3.2,0);
+    for(let i=0;i<6;i++){const a=i*TAU/6+t*.08;addZone(z,TYPE_FOOD,cx+Math.cos(a)*250,cy+Math.sin(a)*165,30,0,1.2,0);}
+  } else if(arenaId==='glyphs'){
+    [[160,120],[864,130],[840,520],[190,510]].forEach((p,i)=>addZone(z,TYPE_WAYPOINT,p[0],p[1],42,0,120,i));
+    addZone(z,TYPE_FOOD,512,320,60,0,1.8,0);
+  } else if(arenaId==='maze'){
+    addZone(z,TYPE_WAYPOINT,920,520,48,0,210,0);
+    addZone(z,TYPE_FOOD,275,120,34,0,1.4,0); addZone(z,TYPE_FOOD,520,520,34,0,1.6,0); addZone(z,TYPE_FOOD,780,180,34,0,1.5,0);
+    addZone(z,TYPE_WALL,210,320,18,240,0,0); addZone(z,TYPE_WALL,410,180,18,180,0,0); addZone(z,TYPE_WALL,610,450,18,190,0,0); addZone(z,TYPE_WALL,770,265,18,220,0,0);
+    addZone(z,TYPE_WALL,520,330,190,18,0,0); addZone(z,TYPE_HAZARD,660,110,42,0,1.1,0); addZone(z,TYPE_HAZARD,380,560,46,0,1.2,0);
+  } else if(arenaId==='toxic'){
+    addZone(z,TYPE_WAYPOINT,cx,cy,52,0,250,0); addZone(z,TYPE_FOOD,cx,cy,70,0,2.2,0);
+    for(let i=0;i<13;i++){const a=i*.82+t*.32;const r=70+i*18;addZone(z,TYPE_HAZARD,cx+Math.cos(a)*r,cy+Math.sin(a)*r*.72,34,0,1.4,0);}
+  } else if(arenaId==='gate'){
+    addZone(z,TYPE_WAYPOINT,930,cy,55,0,240,0); addZone(z,TYPE_FOOD,130,cy,52,0,1.4,0); addZone(z,TYPE_FOOD,705,110,36,0,1.2,0); addZone(z,TYPE_FOOD,720,535,36,0,1.2,0);
+    for(let i=0;i<4;i++){
+      const x=260+i*170; const gapY=cy + Math.sin(t*.75+i*1.7)*170; const gap=105;
+      addZone(z,TYPE_WALL,x,gapY-gap/2-190,17,190,0,0); addZone(z,TYPE_WALL,x,gapY+gap/2+190,17,190,0,0);
+    }
+  } else if(arenaId==='dual'){
+    addZone(z,TYPE_WAYPOINT,265,cy,70,0,130,0); addZone(z,TYPE_WAYPOINT,760,cy,70,0,130,1);
+    addZone(z,TYPE_FOOD,265,cy,92,0,1.75,0,1); addZone(z,TYPE_FOOD,760,cy,92,0,1.75,0,1);
+    addZone(z,TYPE_FOOD,cx,cy,56,0,1.0,0);
+  } else if(arenaId==='gradient'){
+    for(let i=0;i<12;i++){ const x=110+i*75, y=cy+Math.sin(i*.9+t*.05)*95; addZone(z,TYPE_FOOD,x,y,38+i*1.5,0,0.75+i*.12,0); }
+    addZone(z,TYPE_WAYPOINT,910,cy,58,0,170,0);
+  } else if(arenaId==='corridor'){
+    addZone(z,TYPE_WAYPOINT,915,cy,64,0,185,0);
+    for(let i=0;i<7;i++){ addZone(z,TYPE_FOOD,150+i*120,cy+Math.sin(i*1.4)*95,34,0,1.15,0); }
+    addZone(z,TYPE_WALL,500,58,520,14,0,0); addZone(z,TYPE_WALL,500,WORLD.h-58,520,14,0,0);
+  } else if(arenaId==='softgate'){
+    addZone(z,TYPE_WAYPOINT,920,cy,65,0,220,0); addZone(z,TYPE_FOOD,125,cy,58,0,1.5,0);
+    for(let i=0;i<3;i++){ const x=315+i*190; const gapY=cy + Math.sin(t*.35+i*1.2)*105; const gap=170; addZone(z,TYPE_WALL,x,gapY-gap/2-205,16,175,0,0); addZone(z,TYPE_WALL,x,gapY+gap/2+205,16,175,0,0); }
+    addZone(z,TYPE_FOOD,510,cy,42,0,1.25,0); addZone(z,TYPE_FOOD,715,cy,42,0,1.25,0);
+  } else if(arenaId==='forage'){
+    for(let i=0;i<16;i++){const x=80+((i*173)%850), y=70+((i*97)%500); addZone(z,TYPE_FOOD,x,y,28+((i*7)%18),0,1.05+(i%4)*.25,0);}
+    for(let i=0;i<9;i++){const x=120+((i*229)%780), y=90+((i*151)%450); addZone(z,TYPE_HAZARD,x,y,38+((i*5)%20),0,0.9+(i%3)*.25,0);}
+  } else if(arenaId==='trap'){
+    addZone(z,TYPE_WAYPOINT,cx,cy,48,0,300,0); addZone(z,TYPE_FOOD,cx,cy,70,0,2.4,0);
+    for(let i=0;i<18;i++){ if(i===3||i===10||i===15) continue; const a=i*TAU/18+t*.08; addZone(z,TYPE_HAZARD,cx+Math.cos(a)*142,cy+Math.sin(a)*118,32,0,1.65,0); }
+    for(let i=0;i<5;i++){const a=i*TAU/5; addZone(z,TYPE_FOOD,cx+Math.cos(a)*320,cy+Math.sin(a)*230,28,0,1.2,0);}
+  } else if(arenaId==='split'){
+    addZone(z,TYPE_WAYPOINT,175,cy,58,0,180,0); addZone(z,TYPE_WAYPOINT,850,cy,58,0,180,0);
+    addZone(z,TYPE_FOOD,175,cy,76,0,1.6,0); addZone(z,TYPE_FOOD,850,cy,76,0,1.6,0);
+    addZone(z,TYPE_HAZARD,cx,cy,70,0,1.6,0); addZone(z,TYPE_WALL,cx,150,16,115,0,0); addZone(z,TYPE_WALL,cx,490,16,115,0,0);
+  } else if(arenaId==='rain'){
+    addZone(z,TYPE_WAYPOINT,880,120,48,0,220,0); addZone(z,TYPE_WAYPOINT,160,520,48,0,220,1);
+    for(let i=0;i<10;i++){ const x=((i*113 + t*95*(i%2?1:-1))%1100)-40; const y=70+((i*83)%520); addZone(z,TYPE_HAZARD,x,y,42,0,1.25+(i%3)*.25,0); }
+    for(let i=0;i<6;i++){addZone(z,TYPE_FOOD,100+i*160,320+Math.sin(t*.4+i)*140,26,0,1.15,0);}
+  } else if(arenaId==='symbiosis'){
+    for(let i=0;i<5;i++){const a=i*TAU/5+t*.05;addZone(z,TYPE_FOOD,cx+Math.cos(a)*280,cy+Math.sin(a)*205,62,0,1.8,0,1);}
+    addZone(z,TYPE_HAZARD,cx,cy,80,0,1.1,0);
+    for(let i=0;i<8;i++){const a=i*TAU/8+t*.12; addZone(z,TYPE_HAZARD,cx+Math.cos(a)*170,cy+Math.sin(a)*120,25,0,.85,0);}
+  } else if(arenaId==='ring'){
+    const pts=6; for(let i=0;i<pts;i++){const a=i*TAU/pts+t*.04; addZone(z,TYPE_WAYPOINT,cx+Math.cos(a)*310,cy+Math.sin(a)*220,39,0,100,i);}
+    addZone(z,TYPE_HAZARD,cx,cy,95,0,1.2,0); for(let i=0;i<6;i++){const a=(i+.5)*TAU/6;addZone(z,TYPE_FOOD,cx+Math.cos(a)*210,cy+Math.sin(a)*150,28,0,1.1,0);}
+  } else if(arenaId==='bridge'){
+    addZone(z,TYPE_WAYPOINT,910,cy,52,0,260,0); addZone(z,TYPE_FOOD,115,cy,42,0,1.0,0);
+    addZone(z,TYPE_WALL,360,145,22,145,0,0); addZone(z,TYPE_WALL,360,505,22,135,0,0);
+    addZone(z,TYPE_WALL,520,320,20,185,0,0); addZone(z,TYPE_WALL,700,135,22,135,0,0); addZone(z,TYPE_WALL,700,505,22,135,0,0);
+    for(let i=0;i<5;i++){ addZone(z,TYPE_HAZARD,455+i*90,cy+Math.sin(t*.65+i)*92,28,0,1.05,0); }
+    addZone(z,TYPE_FOOD,470,210,30,0,1.15,0); addZone(z,TYPE_FOOD,705,430,30,0,1.15,0);
+  } else if(arenaId==='pulse'){
+    addZone(z,TYPE_WAYPOINT,cx,cy,46,0,210,0);
+    for(let i=0;i<8;i++){ const a=i*TAU/8; const beat=.55+.45*Math.sin(t*.35+i*1.9); addZone(z,TYPE_FOOD,cx+Math.cos(a)*280,cy+Math.sin(a)*200,24+beat*42,0,.75+beat*1.6,0, i%2?1:0); }
+    for(let i=0;i<8;i++){ const a=i*TAU/8+t*.18; addZone(z,TYPE_HAZARD,cx+Math.cos(a)*150,cy+Math.sin(a)*108,22,0,.95,0); }
+  } else if(arenaId==='cooperate'){
+    addZone(z,TYPE_WAYPOINT,cx,cy,62,0,190,0);
+    for(let i=0;i<6;i++){ const a=i*TAU/6+t*.03; addZone(z,TYPE_FOOD,cx+Math.cos(a)*265,cy+Math.sin(a)*190,58,0,1.55,0,1); }
+    for(let i=0;i<6;i++){ const a=(i+.5)*TAU/6+t*.11; addZone(z,TYPE_HAZARD,cx+Math.cos(a)*175,cy+Math.sin(a)*128,32,0,1.1,0); }
+    addZone(z,TYPE_HAZARD,cx,cy,52,0,.85,0);
+  } else if(arenaId==='sorting'){
+    addZone(z,TYPE_WAYPOINT,170,150,40,0,120,0); addZone(z,TYPE_WAYPOINT,855,500,40,0,120,1);
+    addZone(z,TYPE_FOOD,170,150,54,0,1.2,0,-1); addZone(z,TYPE_FOOD,855,500,54,0,1.2,0,1);
+    addZone(z,TYPE_WALL,cx,cy,18,230,0,0); addZone(z,TYPE_WALL,cx-190,cy,18,135,0,0); addZone(z,TYPE_WALL,cx+190,cy,18,135,0,0);
+    for(let i=0;i<7;i++){ const a=i*TAU/7+t*.1; addZone(z,TYPE_HAZARD,cx+Math.cos(a)*230,cy+Math.sin(a)*165,26,0,.9,0); }
+  }
+  return z;
+}
+function uploadZones(){
+  zoneList = buildZones(settings.arena, simTime);
+  zonesData.fill(0);
+  zoneList.forEach((z,i)=>{ const o=i*ZONE_STRIDE; zonesData[o]=z.x; zonesData[o+1]=z.y; zonesData[o+2]=z.r; zonesData[o+3]=z.a; zonesData[o+4]=z.type; zonesData[o+5]=z.value; zonesData[o+6]=z.order; zonesData[o+7]=z.phase; });
+  queue.writeBuffer(zoneBuf,0,zonesData);
+}
+
+async function initGPU(){
+  if(!navigator.gpu) throw new Error('WebGPU is not available in this browser. Try current Chrome/Edge or Safari with WebGPU enabled.');
+  const adapter = await navigator.gpu.requestAdapter({powerPreference:'high-performance'});
+  if(!adapter) throw new Error('No WebGPU adapter found.');
+  device = await adapter.requestDevice(); queue = device.queue;
+  ctx = gpuCanvas.getContext('webgpu'); format = navigator.gpu.getPreferredCanvasFormat();
+  ctx.configure({device, format, alphaMode:'opaque'});
+
+  const compCode = `
+struct P{ x:f32,y:f32,vx:f32,vy:f32,species:f32,energy:f32,score:f32,progress:f32,variant:f32 };
+struct Pair{ radius:f32,strength:f32 };
+struct Sp{ hue:f32,motor:f32,metab:f32,noise:f32,popWeight:f32,seed:f32,_a:f32,alive:f32 };
+struct Zone{ x:f32,y:f32,r:f32,a:f32,typ:f32,value:f32,order:f32,phase:f32 };
+struct Sim{ dt:f32,friction:f32,w:f32,h:f32,t:f32,n:f32,speciesCount:f32,samples:f32,zoneCount:f32,forceScale:f32,step:f32,arenaId:f32,selected:f32,motorCost:f32,forceSense:f32,variantCount:f32,trailDecay:f32,trailEmit:f32,trailSense:f32,_pad:f32 };
+@group(0) @binding(0) var<storage,read> src:array<P>;
+@group(0) @binding(1) var<storage,read_write> dst:array<P>;
+@group(0) @binding(2) var<storage,read> inter:array<Pair>;
+@group(0) @binding(3) var<storage,read> brain:array<f32>;
+@group(0) @binding(4) var<storage,read> spp:array<Sp>;
+@group(0) @binding(5) var<storage,read> zones:array<Zone,${MAX_ZONES}>;
+@group(1) @binding(0) var<uniform> sim:Sim;
+@group(2) @binding(0) var<storage,read> trailRead:array<u32>;
+@group(2) @binding(1) var<storage,read_write> trailWrite:array<atomic<u32>>;
+const MAX_SPECIES:u32=${MAX_SPECIES}u;
+const MAX_VARIANTS:u32=${MAX_VARIANTS}u;
+const SENSOR_COUNT:u32=${SENSOR_COUNT}u;
+const HIDDEN_COUNT:u32=${HIDDEN_COUNT}u;
+const ACTION_COUNT:u32=${ACTION_COUNT}u;
+const BRAIN_STRIDE:u32=${BRAIN_STRIDE}u;
+const TRAIL_W:u32=${TRAIL_W}u;
+const TRAIL_H:u32=${TRAIL_H}u;
+const TRAIL_CHANNELS:u32=${TRAIL_CHANNELS}u;
+const TRAIL_SENSOR_OFFSET:u32=${TRAIL_SENSOR_OFFSET}u;
+const FORCE_SENSOR_OFFSET:u32=${FORCE_SENSOR_OFFSET}u;
+const TAU:f32=6.28318530718;
+fn hash11(x:u32)->f32{ var v=x*747796405u+2891336453u; v=((v>>((v>>28u)+4u))^v)*277803737u; v=(v>>22u)^v; return f32(v)/4294967295.0; }
+fn sgn(v:f32)->f32{ if(v<0.0){return -1.0;} return 1.0; }
+fn safeNorm(v:vec2<f32>)->vec2<f32>{ let l=length(v); if(l<0.0001){return vec2<f32>(0.0);} return v/l; }
+fn trailIndex(ix:u32, iy:u32, ch:u32, src:u32)->u32{ return (((src*TRAIL_CHANNELS + ch)*TRAIL_H + iy)*TRAIL_W + ix); }
+fn readTrailCell(ix:i32, iy:i32, ch:u32, src:u32)->f32{
+  let x=u32(clamp(f32(ix),0.0,f32(TRAIL_W-1u))); let y=u32(clamp(f32(iy),0.0,f32(TRAIL_H-1u)));
+  return f32(trailRead[trailIndex(x,y,ch,src)]);
+}
+@compute @workgroup_size(256)
+fn main(@builtin(global_invocation_id) gid:vec3<u32>){
+  let i=gid.x; let n=u32(sim.n); if(i>=n){return;}
+  var p=src[i]; let sp=u32(clamp(p.species,0.0,f32(MAX_SPECIES-1u))); let param=spp[sp];
+  var pairA=vec2<f32>(0.0); var sameA=vec2<f32>(0.0); var otherA=vec2<f32>(0.0);
+  var sameNear:f32=0.0; var otherNear:f32=0.0; var attractPressure:f32=0.0; var repelPressure:f32=0.0;
+  var sameVel=vec2<f32>(0.0); var otherVel=vec2<f32>(0.0); var sameVelW:f32=0.0; var otherVelW:f32=0.0;
+  var speciesA:array<vec2<f32>, ${MAX_SPECIES}>;
+  for(var kk:u32=0u; kk<MAX_SPECIES; kk=kk+1u){ speciesA[kk]=vec2<f32>(0.0); }
+  let loops=max(1u,min(u32(sim.samples),max(1u,n-1u)));
+  for(var s:u32=0u; s<loops; s=s+1u){
+    let j=(i + 1u + ((s*1597u + u32(sim.step)*37u + sp*101u) % n)) % n;
+    if(j==i){continue;}
+    let q=src[j]; let qsp=u32(clamp(q.species,0.0,f32(MAX_SPECIES-1u)));
+    let d=vec2<f32>(q.x-p.x,q.y-p.y); let r=length(d);
+    if(r<0.001){continue;}
+    let dir=d/r;
+    if(qsp==sp && r<44.0){ let w=(1.0-r/44.0); sameNear=sameNear + w; sameVel=sameVel+vec2<f32>(q.vx,q.vy)*w; sameVelW=sameVelW+w; }
+    if(qsp!=sp && r<54.0){ let w=(1.0-r/54.0); otherNear=otherNear + w; otherVel=otherVel+vec2<f32>(q.vx,q.vy)*w; otherVelW=otherVelW+w; }
+    let pr=inter[(sp*MAX_SPECIES+qsp)];
+    if(r<pr.radius){
+      let fall=(1.0-r/pr.radius);
+      let f=dir*pr.strength*fall;
+      pairA=pairA + f; speciesA[qsp]=speciesA[qsp]+f;
+      if(qsp==sp){ sameA=sameA+f; } else { otherA=otherA+f; }
+      if(pr.strength>=0.0){ attractPressure=attractPressure+abs(pr.strength)*fall; } else { repelPressure=repelPressure+abs(pr.strength)*fall; }
+    }
+    if(r<5.0){ let push=dir*(5.0-r)*0.45; pairA=pairA - push; speciesA[qsp]=speciesA[qsp]-push; }
+  }
+  let socialNorm = sim.forceScale * 70.0 / f32(loops);
+  let pairRaw = pairA * socialNorm;
+  let sameRaw = sameA * socialNorm;
+  let otherRaw = otherA * socialNorm;
+  pairA = pairRaw;
+
+  let prog=floor(p.progress+0.001);
+  var targetV=vec2<f32>(0.0); var targetBest:f32=1e9; var targetFound:f32=0.0;
+  var foodV=vec2<f32>(0.0); var foodBest:f32=1e9; var foodMag:f32=0.0;
+  var hazV=vec2<f32>(0.0); var hazBest:f32=1e9; var hazMag:f32=0.0;
+  var wallV=vec2<f32>(0.0);
+  var alive = select(0.0,1.0,p.energy>0.0);
+  for(var zi:u32=0u; zi<u32(sim.zoneCount); zi=zi+1u){
+    let z=zones[zi]; let typ=u32(z.typ+0.5);
+    if(typ==1u){
+      let d=vec2<f32>(z.x-p.x,z.y-p.y); let r=length(d);
+      if(abs(z.order-prog)<0.25 && r<targetBest){ targetBest=r; targetV=d; targetFound=1.0; }
+      if(abs(z.order-prog)<0.25 && r<z.r && alive>0.5){ p.score=p.score+z.value; p.progress=p.progress+1.0; }
+    } else if(typ==2u){
+      let d=vec2<f32>(z.x-p.x,z.y-p.y); let r=length(d);
+      if(r<foodBest){ foodBest=r; foodV=d; foodMag=max(0.0,1.0-r/max(1.0,z.r*3.5)); }
+      if(r<z.r && alive>0.5){
+        var gain=z.value*(1.0+0.0);
+        if(z.phase>0.5){ gain = gain*(0.25+min(2.8,otherNear*0.22)); }
+        if(z.phase<(-0.5)){ gain = gain*(0.25+min(2.8,sameNear*0.22)); }
+        p.energy=min(2.5,p.energy + sim.dt*0.016*gain);
+        p.score=p.score + sim.dt*0.50*gain;
+      }
+    } else if(typ==3u){
+      let d=vec2<f32>(p.x-z.x,p.y-z.y); let r=length(d);
+      if(r<hazBest){ hazBest=r; hazV=d; hazMag=max(0.0,1.0-r/max(1.0,z.r*3.0)); }
+      if(r<z.r && alive>0.5){ p.energy=p.energy - sim.dt*0.018*z.value; p.score=p.score - sim.dt*0.75*z.value; }
+    } else if(typ==4u){
+      let dx=p.x-z.x; let dy=p.y-z.y; let px=z.r-abs(dx); let py=z.a-abs(dy);
+      if(px>0.0 && py>0.0){
+        if(px<py){ p.x=z.x+sgn(dx)*(z.r+0.1); p.vx=-p.vx*0.35; wallV=wallV+vec2<f32>(sgn(dx),0.0)*(1.0+px*0.03); }
+        else { p.y=z.y+sgn(dy)*(z.a+0.1); p.vy=-p.vy*0.35; wallV=wallV+vec2<f32>(0.0,sgn(dy))*(1.0+py*0.03); }
+        p.energy=p.energy - sim.dt*0.010; p.score=p.score - sim.dt*0.35;
+      } else {
+        let nx=max(abs(dx)-z.r,0.0); let ny=max(abs(dy)-z.a,0.0); let nr=length(vec2<f32>(nx,ny));
+        if(nr<36.0){ wallV=wallV+safeNorm(vec2<f32>(dx,dy))*(1.0-nr/36.0); }
+      }
+    }
+  }
+  if(p.x<8.0){ wallV.x=wallV.x+1.0; } if(p.x>sim.w-8.0){ wallV.x=wallV.x-1.0; }
+  if(p.y<8.0){ wallV.y=wallV.y+1.0; } if(p.y>sim.h-8.0){ wallV.y=wallV.y-1.0; }
+  let sameFlow=safeNorm(select(vec2<f32>(0.0),sameVel/max(0.001,sameVelW),sameVelW>0.001));
+  let otherFlow=safeNorm(select(vec2<f32>(0.0),otherVel/max(0.001,otherVelW),otherVelW>0.001));
+  let tx=i32(clamp(floor(p.x/sim.w*f32(TRAIL_W)),0.0,f32(TRAIL_W-1u)));
+  let ty=i32(clamp(floor(p.y/sim.h*f32(TRAIL_H)),0.0,f32(TRAIL_H-1u)));
+
+  var sensors:array<f32,${SENSOR_COUNT}>;
+  sensors[0]=(p.x/sim.w)*2.0-1.0; sensors[1]=(p.y/sim.h)*2.0-1.0;
+  let tv=safeNorm(targetV); sensors[2]=tv.x*targetFound; sensors[3]=tv.y*targetFound;
+  let fv=safeNorm(foodV); sensors[4]=fv.x*foodMag; sensors[5]=fv.y*foodMag;
+  let hv=safeNorm(hazV); sensors[6]=hv.x*hazMag; sensors[7]=hv.y*hazMag;
+  let wv=safeNorm(wallV); sensors[8]=wv.x; sensors[9]=wv.y;
+  sensors[10]=clamp(p.energy/2.0,0.0,1.25); sensors[11]=clamp(p.progress/8.0,0.0,1.0);
+  sensors[12]=clamp(sameNear*0.08,0.0,1.0); sensors[13]=clamp(otherNear*0.08,0.0,1.0);
+  sensors[14]=clamp(p.vx*0.025,-1.0,1.0); sensors[15]=clamp(p.vy*0.025,-1.0,1.0);
+  sensors[16]=sin(sim.t*0.055 + param.seed); sensors[17]=hash11(i + u32(sim.step)*7919u)*2.0-1.0;
+  sensors[18]=clamp(pairRaw.x*0.025*sim.forceSense,-1.0,1.0); sensors[19]=clamp(pairRaw.y*0.025*sim.forceSense,-1.0,1.0);
+  sensors[20]=clamp(sameRaw.x*0.025*sim.forceSense,-1.0,1.0); sensors[21]=clamp(sameRaw.y*0.025*sim.forceSense,-1.0,1.0);
+  sensors[22]=clamp(otherRaw.x*0.025*sim.forceSense,-1.0,1.0); sensors[23]=clamp(otherRaw.y*0.025*sim.forceSense,-1.0,1.0);
+  sensors[24]=clamp(attractPressure*0.020*sim.forceSense,-1.0,1.0); sensors[25]=clamp(repelPressure*0.020*sim.forceSense,-1.0,1.0);
+  sensors[26]=sameFlow.x; sensors[27]=sameFlow.y; sensors[28]=otherFlow.x; sensors[29]=otherFlow.y;
+  for(var ch:u32=0u; ch<TRAIL_CHANNELS; ch=ch+1u){
+    for(var srcSp:u32=0u; srcSp<MAX_SPECIES; srcSp=srcSp+1u){
+      let center=readTrailCell(tx,ty,ch,srcSp);
+      let gx=(readTrailCell(tx+1,ty,ch,srcSp)-readTrailCell(tx-1,ty,ch,srcSp))*0.000055*sim.trailSense;
+      let gy=(readTrailCell(tx,ty+1,ch,srcSp)-readTrailCell(tx,ty-1,ch,srcSp))*0.000055*sim.trailSense;
+      let val=center*0.000020*sim.trailSense;
+      let baseTrail=TRAIL_SENSOR_OFFSET + (ch*MAX_SPECIES + srcSp)*3u;
+      sensors[baseTrail]=clamp(gx,-1.0,1.0);
+      sensors[baseTrail+1u]=clamp(gy,-1.0,1.0);
+      sensors[baseTrail+2u]=clamp(val,0.0,1.0);
+    }
+  }
+  for(var qsi:u32=0u; qsi<MAX_SPECIES; qsi=qsi+1u){
+    let sf = speciesA[qsi] * socialNorm * 0.025 * sim.forceSense;
+    sensors[FORCE_SENSOR_OFFSET+qsi*2u]=clamp(sf.x,-1.0,1.0);
+    sensors[FORCE_SENSOR_OFFSET+1u+qsi*2u]=clamp(sf.y,-1.0,1.0);
+  }
+
+  let variant=u32(clamp(p.variant,0.0,f32(MAX_VARIANTS-1u)));
+  let vslot=min(variant,max(0u,u32(sim.variantCount)-1u));
+  let base=(sp*MAX_VARIANTS + vslot)*BRAIN_STRIDE;
+  var hidden:array<f32,${HIDDEN_COUNT}>;
+  let hbOff=base + ${HIDDEN_COUNT*SENSOR_COUNT}u;
+  for(var h:u32=0u; h<HIDDEN_COUNT; h=h+1u){
+    var v=brain[hbOff+h];
+    for(var si:u32=0u; si<SENSOR_COUNT; si=si+1u){ v=v + sensors[si]*brain[base+h*SENSOR_COUNT+si]; }
+    hidden[h]=tanh(v);
+  }
+  var action:array<f32,${ACTION_COUNT}>;
+  let w2Off=hbOff + HIDDEN_COUNT;
+  let abOff=w2Off + ACTION_COUNT*(SENSOR_COUNT+HIDDEN_COUNT);
+  for(var aidx:u32=0u; aidx<ACTION_COUNT; aidx=aidx+1u){
+    var v=brain[abOff+aidx]; let row=w2Off + aidx*(SENSOR_COUNT+HIDDEN_COUNT);
+    for(var si:u32=0u; si<SENSOR_COUNT; si=si+1u){ v=v + sensors[si]*brain[row+si]; }
+    for(var h:u32=0u; h<HIDDEN_COUNT; h=h+1u){ v=v + hidden[h]*brain[row+SENSOR_COUNT+h]; }
+    action[aidx]=tanh(v);
+  }
+  let motor=vec2<f32>(action[0],action[1])*param.motor*0.85;
+  let explore=vec2<f32>(hash11(i*17u+u32(sim.step)*13u)-0.5, hash11(i*31u+u32(sim.step)*29u)-0.5)*param.noise*action[3];
+  let socialGain=clamp(1.0+action[2]*1.2,0.0,2.6);
+  let pulse=action[5]*0.18*(sameNear-otherNear);
+  let chemSail=safeNorm(pairA)*action[6]*0.55;
+  let brake=clamp((action[7]+1.0)*0.5,0.0,1.0);
+  let alignSame=(sameFlow-safeNorm(vec2<f32>(p.vx,p.vy)))*action[8]*0.32;
+  let alignOther=(otherFlow-safeNorm(vec2<f32>(p.vx,p.vy)))*action[9]*0.25;
+  var accel=pairA*socialGain + motor + explore + safeNorm(pairA)*pulse + chemSail + alignSame + alignOther;
+  if(p.energy<=0.0){ accel=vec2<f32>(0.0); p.vx=p.vx*0.96; p.vy=p.vy*0.96; }
+  p.vx=(p.vx+accel.x*sim.dt)*sim.friction*(1.0-brake*0.20*sim.dt); p.vy=(p.vy+accel.y*sim.dt)*sim.friction*(1.0-brake*0.20*sim.dt);
+  let spd=length(vec2<f32>(p.vx,p.vy)); if(spd>95.0){ let nv=safeNorm(vec2<f32>(p.vx,p.vy))*95.0; p.vx=nv.x; p.vy=nv.y; }
+  p.x=p.x+p.vx*sim.dt; p.y=p.y+p.vy*sim.dt;
+  if(p.x<0.0){p.x=0.0;p.vx=-p.vx*0.72;p.energy=p.energy-sim.dt*0.003;} if(p.x>sim.w){p.x=sim.w;p.vx=-p.vx*0.72;p.energy=p.energy-sim.dt*0.003;}
+  if(p.y<0.0){p.y=0.0;p.vy=-p.vy*0.72;p.energy=p.energy-sim.dt*0.003;} if(p.y>sim.h){p.y=sim.h;p.vy=-p.vy*0.72;p.energy=p.energy-sim.dt*0.003;}
+  if(alive>0.5){
+    var trailWork:f32=0.0;
+    let ux=u32(clamp(f32(tx),0.0,f32(TRAIL_W-1u))); let uy=u32(clamp(f32(ty),0.0,f32(TRAIL_H-1u)));
+    for(var ech:u32=0u; ech<TRAIL_CHANNELS; ech=ech+1u){
+      let ev=max(0.0,action[10u+ech]);
+      if(ev>0.02 && sim.trailEmit>0.0){
+        let amt=u32(clamp(ev*sim.trailEmit*sim.dt*900.0,0.0,4095.0));
+        atomicAdd(&trailWrite[trailIndex(ux,uy,ech,sp)], amt);
+        trailWork=trailWork+ev;
+      }
+    }
+    let motorWork=dot(motor,motor)*0.00065 + abs(action[3])*0.00045 + abs(action[5])*0.00035 + abs(action[2])*0.00018 + abs(action[6])*0.00020 + abs(action[8])*0.00016 + abs(action[9])*0.00014 + trailWork*0.00024 + brake*0.00008;
+    p.energy=p.energy - sim.dt*(0.0018*param.metab + sim.motorCost*motorWork);
+    p.score=p.score + sim.dt*(0.035 + 0.010*p.energy + 0.012*p.progress);
+  }
+  p.energy=clamp(p.energy,-0.2,2.5);
+  dst[i]=p;
+}`;
+
+
+  const decayCode = `
+struct Sim{ dt:f32,friction:f32,w:f32,h:f32,t:f32,n:f32,speciesCount:f32,samples:f32,zoneCount:f32,forceScale:f32,step:f32,arenaId:f32,selected:f32,motorCost:f32,forceSense:f32,variantCount:f32,trailDecay:f32,trailEmit:f32,trailSense:f32,_pad:f32 };
+@group(0) @binding(0) var<storage,read> oldTrail:array<u32>;
+@group(0) @binding(1) var<storage,read_write> newTrail:array<atomic<u32>>;
+@group(1) @binding(0) var<uniform> sim:Sim;
+const TRAIL_TOTAL:u32=${TRAIL_W*TRAIL_H*TRAIL_CHANNELS*MAX_SPECIES}u;
+@compute @workgroup_size(256)
+fn main(@builtin(global_invocation_id) gid:vec3<u32>){
+  let i=gid.x; if(i>=TRAIL_TOTAL){return;}
+  let v=f32(oldTrail[i])*sim.trailDecay;
+  atomicStore(&newTrail[i], u32(clamp(v,0.0,4290000000.0)));
+}`;
+
+  const renderCode = `
+struct P{ x:f32,y:f32,vx:f32,vy:f32,species:f32,energy:f32,score:f32,progress:f32,variant:f32 };
+struct Sp{ hue:f32,motor:f32,metab:f32,noise:f32,popWeight:f32,seed:f32,_a:f32,alive:f32 };
+struct R{ w:f32,h:f32,hiA:f32,hiB:f32,mode:f32,selected:f32,highlight:f32,_pad:f32 };
+@group(0) @binding(0) var<storage,read> ps:array<P>;
+@group(0) @binding(1) var<storage,read> spp:array<Sp>;
+@group(1) @binding(0) var<uniform> r:R;
+struct O{ @builtin(position) pos:vec4<f32>, @location(0) hue:f32, @location(1) energy:f32, @location(2) species:f32 };
+fn hue(h:f32)->vec3<f32>{ let rr=clamp(abs(h*6.0-3.0)-1.0,0.0,1.0); let gg=clamp(2.0-abs(h*6.0-2.0),0.0,1.0); let bb=clamp(2.0-abs(h*6.0-4.0),0.0,1.0); return vec3<f32>(rr,gg,bb); }
+@vertex fn vs(@builtin(vertex_index) id:u32)->O{ let p=ps[id]; let sp=u32(max(0.0,p.species)); var o:O; o.pos=vec4<f32>((p.x/r.w)*2.0-1.0,1.0-(p.y/r.h)*2.0,0.0,1.0); o.hue=spp[sp].hue; o.energy=p.energy; o.species=p.species; return o; }
+@fragment fn fs(i:O)->@location(0) vec4<f32>{
+  var c=hue(i.hue);
+  var b=0.42+0.68*clamp(i.energy,0.0,1.2);
+  if(r.highlight>0.5 && r.mode>1.5){
+    let isA=abs(i.species-r.hiA)<0.25;
+    let isB=abs(i.species-r.hiB)<0.25;
+    if(isA || isB){
+      b=b*1.75;
+      if(isA){ c=mix(c,vec3<f32>(0.70,1.00,1.00),0.22); }
+      if(isB){ c=mix(c,vec3<f32>(1.00,0.82,0.28),0.18); }
+    } else {
+      b=b*0.14;
+      c=c*0.40;
+    }
+  }
+  return vec4<f32>(clamp(c*b,vec3<f32>(0.0),vec3<f32>(1.0)),1.0);
+}`;
+
+  particleLayout = device.createBindGroupLayout({entries:[
+    {binding:0,visibility:GPUShaderStage.COMPUTE,buffer:{type:'read-only-storage'}},
+    {binding:1,visibility:GPUShaderStage.COMPUTE,buffer:{type:'storage'}},
+    {binding:2,visibility:GPUShaderStage.COMPUTE,buffer:{type:'read-only-storage'}},
+    {binding:3,visibility:GPUShaderStage.COMPUTE,buffer:{type:'read-only-storage'}},
+    {binding:4,visibility:GPUShaderStage.COMPUTE,buffer:{type:'read-only-storage'}},
+    {binding:5,visibility:GPUShaderStage.COMPUTE,buffer:{type:'read-only-storage'}}
+  ]});
+  trailLayout = device.createBindGroupLayout({entries:[
+    {binding:0,visibility:GPUShaderStage.COMPUTE,buffer:{type:'read-only-storage'}},
+    {binding:1,visibility:GPUShaderStage.COMPUTE,buffer:{type:'storage'}}
+  ]});
+  simLayout = device.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,buffer:{type:'uniform'}}]});
+  renderLayout = device.createBindGroupLayout({entries:[
+    {binding:0,visibility:GPUShaderStage.VERTEX,buffer:{type:'read-only-storage'}},
+    {binding:1,visibility:GPUShaderStage.VERTEX,buffer:{type:'read-only-storage'}}
+  ]});
+  const rULayout = device.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.VERTEX|GPUShaderStage.FRAGMENT,buffer:{type:'uniform'}}]});
+  compPipe=device.createComputePipeline({layout:device.createPipelineLayout({bindGroupLayouts:[particleLayout,simLayout,trailLayout]}),compute:{module:device.createShaderModule({code:compCode}),entryPoint:'main'}});
+  decayPipe=device.createComputePipeline({layout:device.createPipelineLayout({bindGroupLayouts:[trailLayout,simLayout]}),compute:{module:device.createShaderModule({code:decayCode}),entryPoint:'main'}});
+  renderPipe=device.createRenderPipeline({layout:device.createPipelineLayout({bindGroupLayouts:[renderLayout,rULayout]}),vertex:{module:device.createShaderModule({code:renderCode}),entryPoint:'vs'},fragment:{module:device.createShaderModule({code:renderCode}),entryPoint:'fs',targets:[{format}]},primitive:{topology:'point-list'}});
+  simUBuf=device.createBuffer({size:80,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+  renderUBuf=device.createBuffer({size:32,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+  interBuf=device.createBuffer({size:inter.byteLength,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
+  brainBuf=device.createBuffer({size:brainData.byteLength,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
+  speciesBuf=device.createBuffer({size:speciesData.byteLength,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
+  zoneBuf=device.createBuffer({size:zonesData.byteLength,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
+  trailBufA=device.createBuffer({size:trailDataBytes,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST});
+  trailBufB=device.createBuffer({size:trailDataBytes,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST});
+  simBG=device.createBindGroup({layout:simLayout,entries:[{binding:0,resource:{buffer:simUBuf}}]});
+  renderUBG=device.createBindGroup({layout:rULayout,entries:[{binding:0,resource:{buffer:renderUBuf}}]});
+  makeParticleBuffers();
+}
+let renderUBG;
+function makeParticleBuffers(){
+  pBytes = settings.totalParticles * PARTICLE_STRIDE * 4;
+  bufA?.destroy?.(); bufB?.destroy?.();
+  bufA=device.createBuffer({size:pBytes,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.VERTEX|GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST});
+  bufB=device.createBuffer({size:pBytes,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.VERTEX|GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST});
+  currentBuffer=bufA; flip=false;
+  rebuildBindGroups();
+}
+function rebuildBindGroups(){
+  compBG_A=device.createBindGroup({layout:particleLayout,entries:[{binding:0,resource:{buffer:bufA}},{binding:1,resource:{buffer:bufB}},{binding:2,resource:{buffer:interBuf}},{binding:3,resource:{buffer:brainBuf}},{binding:4,resource:{buffer:speciesBuf}},{binding:5,resource:{buffer:zoneBuf}}]});
+  compBG_B=device.createBindGroup({layout:particleLayout,entries:[{binding:0,resource:{buffer:bufB}},{binding:1,resource:{buffer:bufA}},{binding:2,resource:{buffer:interBuf}},{binding:3,resource:{buffer:brainBuf}},{binding:4,resource:{buffer:speciesBuf}},{binding:5,resource:{buffer:zoneBuf}}]});
+  if(trailBufA&&trailBufB){
+    trailBG_AB=device.createBindGroup({layout:trailLayout,entries:[{binding:0,resource:{buffer:trailBufA}},{binding:1,resource:{buffer:trailBufB}}]});
+    trailBG_BA=device.createBindGroup({layout:trailLayout,entries:[{binding:0,resource:{buffer:trailBufB}},{binding:1,resource:{buffer:trailBufA}}]});
+  }
+  renderBG_A=device.createBindGroup({layout:renderLayout,entries:[{binding:0,resource:{buffer:bufA}},{binding:1,resource:{buffer:speciesBuf}}]});
+  renderBG_B=device.createBindGroup({layout:renderLayout,entries:[{binding:0,resource:{buffer:bufB}},{binding:1,resource:{buffer:speciesBuf}}]});
+}
+function clearTrailBuffers(){
+  if(!queue || !trailBufA || !trailBufB) return;
+  queue.writeBuffer(trailBufA,0,trailZero);
+  queue.writeBuffer(trailBufB,0,trailZero);
+  trailFlip=false; lastTrailSnapshot=null;
+}
+function uploadAll(){
+  if(!device) return;
+  if(pBytes !== settings.totalParticles*PARTICLE_STRIDE*4) makeParticleBuffers();
+  queue.writeBuffer(bufA,0,particles);
+  queue.writeBuffer(bufB,0,particles);
+  queue.writeBuffer(interBuf,0,inter);
+  queue.writeBuffer(brainBuf,0,brainData);
+  queue.writeBuffer(speciesBuf,0,speciesData);
+  uploadZones();
+  clearTrailBuffers();
+}
+function uploadGenomes(){
+  refreshSpeciesBuffers();
+  queue.writeBuffer(interBuf,0,inter);
+  queue.writeBuffer(brainBuf,0,brainData);
+  queue.writeBuffer(speciesBuf,0,speciesData);
+}
+function updateUniforms(){
+  const arenaIndex = Object.keys(ARENA_NAMES).indexOf(settings.arena);
+  const u=new Float32Array([settings.dt,settings.friction,WORLD.w,WORLD.h,simTime,particleCount,speciesCount,settings.samples,zoneList.length,settings.forceScale,simStep,Math.max(0,arenaIndex),selectedSpecies,settings.motorCost,settings.forceSenseScale,settings.variantCount,settings.trailDecay,settings.trailEmitScale,settings.trailSenseScale,0]);
+  queue.writeBuffer(simUBuf,0,u);
+  const c = settings.highlight ? hoverCell : null;
+  const hiA = c ? c.a : -1;
+  const hiB = c ? c.b : -1;
+  const mode = c ? 2 : 0;
+  queue.writeBuffer(renderUBuf,0,new Float32Array([WORLD.w,WORLD.h,hiA,hiB,mode,selectedSpecies,settings.highlight?1:0,0]));
+}
+function gpuFrame(render=true){
+  if(ending) return;
+  uploadZones(); updateUniforms();
+  const enc=device.createCommandEncoder();
+  const tbg=trailFlip?trailBG_BA:trailBG_AB;
+  const dp=enc.beginComputePass(); dp.setPipeline(decayPipe); dp.setBindGroup(0,tbg); dp.setBindGroup(1,simBG); dp.dispatchWorkgroups(Math.ceil((TRAIL_W*TRAIL_H*TRAIL_CHANNELS*MAX_SPECIES)/256)); dp.end();
+  const cp=enc.beginComputePass(); cp.setPipeline(compPipe); cp.setBindGroup(0,flip?compBG_B:compBG_A); cp.setBindGroup(1,simBG); cp.setBindGroup(2,tbg); cp.dispatchWorkgroups(Math.ceil(particleCount/256)); cp.end();
+  const dstIsA=flip; currentBuffer=dstIsA?bufA:bufB;
+  if(render){
+    const rp=enc.beginRenderPass({colorAttachments:[{view:ctx.getCurrentTexture().createView(),loadOp:settings.trails?'load':'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:1}}]});
+    rp.setPipeline(renderPipe); rp.setBindGroup(0,dstIsA?renderBG_A:renderBG_B); rp.setBindGroup(1,renderUBG); rp.draw(particleCount); rp.end();
+  }
+  queue.submit([enc.finish()]); flip=!flip; trailFlip=!trailFlip;
+  simTime += settings.dt; simStep += 1;
+}
+async function readParticles(force=false){
+  if(snapshotPending && !force) return null;
+  while(snapshotPending) await new Promise(r=>setTimeout(r,8));
+  snapshotPending=true;
+  const rb=device.createBuffer({size:pBytes,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+  const enc=device.createCommandEncoder(); enc.copyBufferToBuffer(currentBuffer,0,rb,0,pBytes); queue.submit([enc.finish()]);
+  await rb.mapAsync(GPUMapMode.READ);
+  const out=new Float32Array(rb.getMappedRange()).slice();
+  rb.unmap(); rb.destroy(); snapshotPending=false; return out;
+}
+async function readTrails(force=false){
+  if(trailPending && !force) return null;
+  while(trailPending) await new Promise(r=>setTimeout(r,8));
+  if(!trailBufA || !trailBufB) return null;
+  trailPending=true;
+  const src=trailFlip?trailBufB:trailBufA;
+  const rb=device.createBuffer({size:trailDataBytes,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+  const enc=device.createCommandEncoder(); enc.copyBufferToBuffer(src,0,rb,0,trailDataBytes); queue.submit([enc.finish()]);
+  await rb.mapAsync(GPUMapMode.READ);
+  const out=new Uint32Array(rb.getMappedRange()).slice();
+  rb.unmap(); rb.destroy(); trailPending=false; return out;
+}
+function aggregateSnapshot(arr){
+  computeMatrixSalience(arr);
+  const stats=Array.from({length:speciesCount},(_,i)=>({
+    i,count:0,alive:0,score:0,energy:0,progress:0,fitness:0,repr:null,speed:0,chemOut:0,chemIn:0,role:'',
+    variants:Array.from({length:MAX_VARIANTS},(_,v)=>({v,count:0,alive:0,score:0,energy:0,progress:0,fitness:0}))
+  }));
+  for(let i=0;i<particleCount;i++){
+    const o=i*PARTICLE_STRIDE, s=clamp(Math.floor(arr[o+4]),0,speciesCount-1), v=clamp(Math.floor(arr[o+8]||0),0,MAX_VARIANTS-1), st=stats[s], vt=st.variants[v];
+    st.count++; vt.count++;
+    if(arr[o+5]>0){ st.alive++; vt.alive++; }
+    st.score+=arr[o+6]; st.energy+=arr[o+5]; st.progress+=arr[o+7]; st.speed+=Math.hypot(arr[o+2],arr[o+3]);
+    vt.score+=arr[o+6]; vt.energy+=arr[o+5]; vt.progress+=arr[o+7];
+    if(!st.repr || arr[o+6] > st.repr.score) st.repr={x:arr[o],y:arr[o+1],vx:arr[o+2],vy:arr[o+3],energy:arr[o+5],score:arr[o+6],progress:arr[o+7],species:s,variant:v};
+  }
+  for(const st of stats){
+    if(st.count){ st.avgScore=st.score/st.count; st.avgEnergy=st.energy/st.count; st.avgProgress=st.progress/st.count; st.aliveFrac=st.alive/st.count; st.avgSpeed=st.speed/st.count; }
+    else { st.avgScore=st.avgEnergy=st.avgProgress=st.aliveFrac=st.avgSpeed=0; }
+    for(const vt of st.variants){
+      if(vt.count){ vt.avgScore=vt.score/vt.count; vt.avgEnergy=vt.energy/vt.count; vt.avgProgress=vt.progress/vt.count; vt.aliveFrac=vt.alive/vt.count; }
+      else { vt.avgScore=vt.avgEnergy=vt.avgProgress=vt.aliveFrac=0; }
+      vt.fitness = vt.avgScore + vt.aliveFrac*8 + vt.avgEnergy*3 + vt.avgProgress*8;
+    }
+    st.fitness = st.avgScore + st.aliveFrac*8 + st.avgEnergy*3 + st.avgProgress*8;
+    st.chemOut=0; st.chemIn=0;
+    for(let q=0;q<speciesCount;q++){ st.chemOut += matrixUse[st.i*MAX_SPECIES+q]||0; st.chemIn += matrixUse[q*MAX_SPECIES+st.i]||0; }
+    st.role=inferRole(st);
+    Object.assign(species[st.i], {fitness:st.fitness, avgScore:st.avgScore, count:st.count, alive:st.alive, variantFitness:st.variants.map(v=>v.fitness), role:st.role});
+  }
+  lastStats=stats; lastBest=Math.max(...stats.map(s=>s.fitness)); lastAvg=stats.reduce((a,b)=>a+b.fitness,0)/Math.max(1,stats.length);
+  lastAliveAvg=stats.reduce((a,b)=>a+b.aliveFrac,0)/Math.max(1,stats.length);
+  lastProgressAvg=stats.reduce((a,b)=>a+b.avgProgress,0)/Math.max(1,stats.length);
+  lastEnergyAvg=stats.reduce((a,b)=>a+b.avgEnergy,0)/Math.max(1,stats.length);
+  let d=0,c=0; for(let a=0;a<speciesCount;a++)for(let b=a+1;b<speciesCount;b++){d+=brainDistance(species[a].brain,species[b].brain)+interDistance(a,b)*0.1;c++;} lastDiversity=c?d/c:0;
+}
+function brainDistance(a,b){ let s=0; for(let i=0;i<a.length;i+=7) s+=Math.abs(a[i]-b[i]); return s/(a.length/7); }
+function interDistance(a,b){ let s=0; for(let k=0;k<speciesCount;k++){s+=Math.abs(inter[pairOffset(a,k)+1]-inter[pairOffset(b,k)+1]);s+=Math.abs(inter[pairOffset(k,a)+1]-inter[pairOffset(k,b)+1]);} return s/Math.max(1,speciesCount*2); }
+function computeMatrixSalience(arr){
+  matrixUse.fill(0);
+  const stride=Math.max(1,Math.floor(particleCount/520));
+  const ids=[]; for(let i=0;i<particleCount;i+=stride) ids.push(i);
+  for(let ia=0; ia<ids.length; ia++){
+    const i=ids[ia], po=i*PARTICLE_STRIDE, a=clamp(Math.floor(arr[po+4]),0,speciesCount-1);
+    const px=arr[po], py=arr[po+1];
+    for(let jb=0; jb<ids.length; jb++){
+      const j=ids[jb]; if(i===j) continue;
+      const qo=j*PARTICLE_STRIDE, b=clamp(Math.floor(arr[qo+4]),0,speciesCount-1);
+      const dx=arr[qo]-px, dy=arr[qo+1]-py, d=Math.hypot(dx,dy); if(d<0.001) continue;
+      const off=pairOffset(a,b), rad=inter[off], st=inter[off+1];
+      if(d<rad) matrixUse[a*MAX_SPECIES+b]+=Math.abs(st)*(1-d/rad);
+    }
+  }
+  matrixUseMax=Math.max(1,...matrixUse.slice(0,speciesCount*MAX_SPECIES));
+}
+function inferRole(st){
+  const chem=(st.chemOut+st.chemIn)/Math.max(1,matrixUseMax);
+  if(st.aliveFrac>0.55 && st.avgProgress>1.2) return 'pathfinder';
+  if(st.aliveFrac>0.55 && chem>0.9) return 'symbiont';
+  if(st.avgEnergy>1.15 && st.aliveFrac>0.45) return 'forager';
+  if(st.avgSpeed>38 && st.avgProgress>0.4) return 'sprinter';
+  if(st.chemIn>st.chemOut*1.6 && st.aliveFrac>0.3) return 'anchor';
+  if(st.chemOut>st.chemIn*1.6 && st.aliveFrac>0.3) return 'influencer';
+  if(st.aliveFrac<0.12) return 'fragile';
+  return 'generalist';
+}
+function chooseParent(pool){
+  const minFit=Math.min(...pool.map(p=>p.fitness)); const weights=pool.map(p=>Math.pow(Math.max(0.001,p.fitness-minFit+1),1.4)); const tot=weights.reduce((a,b)=>a+b,0); let r=Math.random()*tot;
+  for(let i=0;i<pool.length;i++){ r-=weights[i]; if(r<=0) return pool[i]; } return pool[pool.length-1];
+}
+function mutateBrain(b,rate){
+  const out=new Float32Array(b);
+  for(let i=0;i<out.length;i++){
+    if(Math.random()<rate) out[i]=clamp(out[i]+gauss()*0.28,-4,4);
+    if(Math.random()<rate*0.08) out[i]=0;
+    if(Math.random()<rate*0.05) out[i]=gauss()*0.7;
+  }
+  return out;
+}
+function crossoverBrain(a,b){
+  const out=new Float32Array(a.length); const cut1=randi(a.length), cut2=randi(a.length); const lo=Math.min(cut1,cut2), hi=Math.max(cut1,cut2);
+  for(let i=0;i<a.length;i++) out[i]=(i>=lo&&i<hi)?b[i]:a[i];
+  return out;
+}
+function chooseVariantIndex(parent){
+  const vf = parent.variantFitness || [];
+  const active = Math.max(1,settings.variantCount);
+  const weights = Array.from({length:active},(_,i)=>Math.max(0.001,(vf[i] ?? parent.fitness ?? 0)+0.02));
+  const tot=weights.reduce((a,b)=>a+b,0); let r=Math.random()*tot;
+  for(let i=0;i<weights.length;i++){ r-=weights[i]; if(r<=0) return i; }
+  return 0;
+}
+function chooseVariantBrain(parent){
+  syncRepresentativeBrain(parent);
+  const idx=chooseVariantIndex(parent);
+  return parent.brainVariants?.[idx] || parent.brain;
+}
+function makeChildBrainVariants(parentA,parentB=null,elite=false){
+  const variants=[];
+  const active=Math.max(1,settings.variantCount);
+  for(let v=0; v<MAX_VARIANTS; v++){
+    let base;
+    if(elite && v===0){ base = chooseVariantBrain(parentA); }
+    else if(parentB && settings.crossover){ base = crossoverBrain(chooseVariantBrain(parentA), chooseVariantBrain(parentB)); }
+    else { base = chooseVariantBrain(parentA); }
+    const rate = (elite && v===0) ? settings.variantMutationRate*0.10 : (settings.mutationRate*0.55 + settings.variantMutationRate*(v<active?1.0:0.35));
+    variants.push(mutateBrain(base, rate));
+  }
+  return variants;
+}
+function mutateSpeciesChild(parentA,parentB,index){
+  const useB=parentB && settings.crossover;
+  const brainVariants=makeChildBrainVariants(parentA, useB?parentB:null, false);
+  const child=syncRepresentativeBrain({
+    id:index, name:speciesName(index), hue:fixedSpeciesHue(index),
+    motor:clamp((useB?lerp(parentA.motor,parentB.motor,Math.random()):parentA.motor)+gauss()*settings.mutationRate*0.55,0.08,2.3),
+    metab:clamp((useB?lerp(parentA.metab,parentB.metab,Math.random()):parentA.metab)+gauss()*settings.mutationRate*0.35,0.2,2.5),
+    noise:clamp((useB?lerp(parentA.noise,parentB.noise,Math.random()):parentA.noise)+gauss()*settings.mutationRate*0.22,0,1.5),
+    popWeight:clamp((useB?lerp(parentA.popWeight,parentB.popWeight,Math.random()):parentA.popWeight)+gauss()*settings.mutationRate*0.8,0.08,4),
+    lineage:`G${generation+1}`, parent:[parentA.id,parentB?.id ?? parentA.id], fitness:0, avgScore:0, count:0, alive:0,
+    variantFitness:Array(MAX_VARIANTS).fill(0), brainVariants
+  });
+  child.hue=fixedSpeciesHue(index);
+  return child;
+}
+async function endGeneration(){
+  if(ending) return; ending=true;
+  const snap=await readParticles(true); const tr=await readTrails(true); if(tr) lastTrailSnapshot=tr; if(snap) { lastSnapshot=snap; aggregateSnapshot(snap); recordGenerationStats(); }
+  const ranked=[...species].sort((a,b)=>b.fitness-a.fitness);
+  const keep=Math.max(1,Math.floor(settings.selectionFrac*speciesCount));
+  const pool=ranked.slice(0,keep);
+  if(pool[0]) archiveChampion(pool[0], lastStats.find(st=>st.i===pool[0].id), false);
+  if(pool[1] && generation%8===0) archiveChampion(pool[1], lastStats.find(st=>st.i===pool[1].id), false);
+  const oldSpecies=species, oldInter=new Float32Array(inter);
+  const lineageRefs=[]; const next=[]; const eliteCount=Math.min(2,pool.length);
+  for(let i=0;i<speciesCount;i++){
+    if(i<eliteCount){
+      const p=pool[i];
+      const clone=syncRepresentativeBrain({...p, id:i, name:speciesName(i), brainVariants:makeChildBrainVariants(p,null,true), variantFitness:Array(MAX_VARIANTS).fill(0), parent:[p.id,p.id], lineage:`G${generation+1}E`});
+      next.push(clone); lineageRefs.push({a:p.id,b:p.id});
+    } else {
+      const pa=chooseParent(pool), pb=settings.crossover?chooseParent(pool):pa; next.push(mutateSpeciesChild(pa,pb,i)); lineageRefs.push({a:pa.id,b:pb.id});
+    }
+  }
+  species=next;
+  if(settings.chemistryEvolves){
+    const newInter=new Float32Array(inter.length);
+    const cm=settings.matrixMutationRate;
+    const eliteParentIds=new Set(pool.slice(0,Math.min(3,pool.length)).map(p=>p.id));
+    const bestFit=Math.max(1,...pool.map(p=>Math.max(0,p.fitness)));
+    for(let a=0;a<speciesCount;a++) for(let b=0;b<speciesCount;b++){
+      const oa=lineageRefs[a], ob=lineageRefs[b];
+      const srcA=pairOffset(oa.a,ob.a), srcB=pairOffset(oa.b,ob.b), dst=pairOffset(a,b);
+      const parentRel = settings.crossover ? lerp(oldInter[srcA],oldInter[srcB],Math.random()) : oldInter[srcA];
+      const parentStrength = settings.crossover ? lerp(oldInter[srcA+1],oldInter[srcB+1],Math.random()) : oldInter[srcA+1];
+      newInter[dst]=parentRel;
+      newInter[dst+1]=parentStrength;
+      const touchesElite = eliteParentIds.has(oa.a) || eliteParentIds.has(oa.b) || eliteParentIds.has(ob.a) || eliteParentIds.has(ob.b);
+      const rowFit = Math.max(0, oldSpecies[oa.a]?.fitness || 0, oldSpecies[oa.b]?.fitness || 0) / bestFit;
+      const colFit = Math.max(0, oldSpecies[ob.a]?.fitness || 0, oldSpecies[ob.b]?.fitness || 0) / bestFit;
+      const preserve = clamp((touchesElite?settings.chemistryProtection:settings.chemistryProtection*0.45) + 0.35*Math.max(rowFit,colFit), 0, 0.98);
+      const local = cm * (1.0 - preserve);
+      // Tiny Brownian drift dominates; sign flips/resets become rare exploratory events.
+      newInter[dst]+=gauss()*4.0*local;
+      newInter[dst+1]+=gauss()*0.075*local;
+      if(Math.random()<local*0.045) newInter[dst+1]*=-1;
+      if(Math.random()<local*0.015) newInter[dst+1]=lerp(newInter[dst+1], gauss()*0.35, 0.30);
+      // Preserve strong, useful relations instead of averaging them into neutrality.
+      if(touchesElite && Math.abs(parentStrength)>0.18){ newInter[dst+1]=lerp(newInter[dst+1], parentStrength, settings.chemistryProtection); }
+      newInter[dst]=clamp(newInter[dst],8,240); newInter[dst+1]=clamp(newInter[dst+1],-2.2,2.2);
+    }
+    inter=newInter;
+  } else {
+    inter=oldInter;
+  }
+  generation++; arenaGenerationCount++; maybeAdvanceCurriculum(); simStep=0; simTime=0; nextGenRequested=false;
+  refreshSpeciesBuffers(); spawnParticles(); uploadAll();
+  lastSnapshot=null; ending=false; updateCards(); drawMatrix(); updateHud();
+}
+
+function runBrainJS(sp,sensors,variant=0){
+  const b=species[sp]?.brainVariants?.[clamp(Math.floor(variant||0),0,MAX_VARIANTS-1)] || species[sp]?.brain; if(!b) return {hidden:[],actions:new Array(ACTION_COUNT).fill(0)};
+  const hidden=[];
+  for(let h=0;h<HIDDEN_COUNT;h++){ let v=b[BO.HB+h]; for(let s=0;s<SENSOR_COUNT;s++) v+=sensors[s]*b[BO.W1+h*SENSOR_COUNT+s]; hidden[h]=tanh(v); }
+  const actions=[];
+  for(let a=0;a<ACTION_COUNT;a++){ let v=b[BO.AB+a], row=BO.W2+a*(SENSOR_COUNT+HIDDEN_COUNT); for(let s=0;s<SENSOR_COUNT;s++) v+=sensors[s]*b[row+s]; for(let h=0;h<HIDDEN_COUNT;h++) v+=hidden[h]*b[row+SENSOR_COUNT+h]; actions[a]=tanh(v); }
+  return {hidden,actions};
+}
+function computeSensorsJS(p,sp){
+  const prog=Math.floor(p.progress||0); let target=[0,0,0], tbest=1e9, food=[0,0,0], fbest=1e9, haz=[0,0,0], hbest=1e9, wall=[0,0];
+  for(const z of zoneList){
+    const dx=z.x-p.x, dy=z.y-p.y, r=Math.hypot(dx,dy)||1;
+    if(z.type===TYPE_WAYPOINT && Math.abs(z.order-prog)<.25 && r<tbest){tbest=r; target=[dx/r,dy/r,1];}
+    else if(z.type===TYPE_FOOD && r<fbest){fbest=r; const mag=Math.max(0,1-r/(z.r*3.5)); food=[dx/r*mag,dy/r*mag,mag];}
+    else if(z.type===TYPE_HAZARD && r<hbest){hbest=r; const mag=Math.max(0,1-r/(z.r*3)); haz=[-dx/r*mag,-dy/r*mag,mag];}
+    else if(z.type===TYPE_WALL){ const ddx=p.x-z.x, ddy=p.y-z.y; const nx=Math.max(Math.abs(ddx)-z.r,0), ny=Math.max(Math.abs(ddy)-z.a,0), nr=Math.hypot(nx,ny); if(nr<42){ const rr=Math.hypot(ddx,ddy)||1; wall[0]+=ddx/rr*(1-nr/42); wall[1]+=ddy/rr*(1-nr/42); } }
+  }
+  let same=0, other=0, pair=[0,0], sameF=[0,0], otherF=[0,0], attract=0, repel=0;
+  const perSpecies=Array.from({length:MAX_SPECIES},()=>[0,0]);
+  if(lastSnapshot){ const stride=Math.max(1,Math.floor(particleCount/750)); for(let i=0;i<particleCount;i+=stride){ const o=i*PARTICLE_STRIDE; const qsp=clamp(Math.floor(lastSnapshot[o+4]),0,speciesCount-1); const dx=lastSnapshot[o]-p.x, dy=lastSnapshot[o+1]-p.y, r=Math.hypot(dx,dy); if(r>0){ const pr=pairOffset(sp,qsp), rad=inter[pr], st=inter[pr+1]; const dir=[dx/r,dy/r]; if(r<54){ if(qsp===sp) same+=1-r/54; else other+=1-r/54; } if(r<rad){ const fall=1-r/rad, fx=dir[0]*st*fall, fy=dir[1]*st*fall; pair[0]+=fx; pair[1]+=fy; perSpecies[qsp][0]+=fx; perSpecies[qsp][1]+=fy; if(qsp===sp){sameF[0]+=fx; sameF[1]+=fy;} else {otherF[0]+=fx; otherF[1]+=fy;} if(st>=0) attract+=Math.abs(st)*fall; else repel+=Math.abs(st)*fall; } } } }
+  const wl=Math.hypot(wall[0],wall[1])||1;
+  const sameFlow=[0,0], otherFlow=[0,0];
+  const base=[p.x/WORLD.w*2-1,p.y/WORLD.h*2-1,target[0]*target[2],target[1]*target[2],food[0],food[1],haz[0],haz[1],wall[0]/wl,wall[1]/wl,clamp((p.energy||1)/2,0,1.25),clamp((p.progress||0)/8,0,1),clamp(same*.02,0,1),clamp(other*.02,0,1),clamp((p.vx||0)*.025,-1,1),clamp((p.vy||0)*.025,-1,1),Math.sin(simTime*.055+sp*19.17),0,clamp(pair[0]*.015*settings.forceSenseScale,-1,1),clamp(pair[1]*.015*settings.forceSenseScale,-1,1),clamp(sameF[0]*.015*settings.forceSenseScale,-1,1),clamp(sameF[1]*.015*settings.forceSenseScale,-1,1),clamp(otherF[0]*.015*settings.forceSenseScale,-1,1),clamp(otherF[1]*.015*settings.forceSenseScale,-1,1),clamp(attract*.012*settings.forceSenseScale,-1,1),clamp(repel*.012*settings.forceSenseScale,-1,1),sameFlow[0],sameFlow[1],otherFlow[0],otherFlow[1]];
+  const tx=clamp(Math.floor(p.x/WORLD.w*TRAIL_W),0,TRAIL_W-1), ty=clamp(Math.floor(p.y/WORLD.h*TRAIL_H),0,TRAIL_H-1);
+  for(let ch=0; ch<TRAIL_CHANNELS; ch++) for(let src=0; src<MAX_SPECIES; src++){
+    const get=(xx,yy)=>lastTrailSnapshot?lastTrailSnapshot[trailIndexJS(clamp(xx,0,TRAIL_W-1),clamp(yy,0,TRAIL_H-1),ch,src)]||0:0;
+    base.push(clamp((get(tx+1,ty)-get(tx-1,ty))*0.000055*settings.trailSenseScale,-1,1), clamp((get(tx,ty+1)-get(tx,ty-1))*0.000055*settings.trailSenseScale,-1,1), clamp(get(tx,ty)*0.000020*settings.trailSenseScale,0,1));
+  }
+  for(let q=0;q<MAX_SPECIES;q++){ base.push(clamp(perSpecies[q][0]*.015*settings.forceSenseScale,-1,1), clamp(perSpecies[q][1]*.015*settings.forceSenseScale,-1,1)); }
+  return base;
+}
+function drawBrain(){
+  const sp=clamp(selectedSpecies,0,speciesCount-1); const s=species[sp]; const vsel=lastStats?.[sp]?.repr?.variant || 0; const bsel=s?.brainVariants?.[clamp(Math.floor(vsel),0,MAX_VARIANTS-1)] || s?.brain;
+  bctx.clearRect(0,0,brainCanvas.width,brainCanvas.height); bctx.fillStyle='#010604'; bctx.fillRect(0,0,brainCanvas.width,brainCanvas.height);
+  if(!s) return;
+  const W=brainCanvas.width,H=brainCanvas.height;
+  const sensorPts=SENSOR_NAMES.map((_,i)=>[26,14+i*(H-28)/(SENSOR_COUNT-1)]);
+  const hiddenPts=Array.from({length:HIDDEN_COUNT},(_,i)=>[W*0.52,18+i*(H-36)/(HIDDEN_COUNT-1)]);
+  const actionPts=ACTION_NAMES.map((_,i)=>[W-34,24+i*(H-48)/(ACTION_COUNT-1)]);
+  const lines=[];
+  for(let h=0;h<HIDDEN_COUNT;h++) for(let si=0;si<SENSOR_COUNT;si++){ const w=bsel[BO.W1+h*SENSOR_COUNT+si]; if(Math.abs(w)>.25) lines.push({a:sensorPts[si],b:hiddenPts[h],w}); }
+  for(let a=0;a<ACTION_COUNT;a++){ const row=BO.W2+a*(SENSOR_COUNT+HIDDEN_COUNT); for(let si=0;si<SENSOR_COUNT;si++){ const w=bsel[row+si]; if(Math.abs(w)>.25) lines.push({a:sensorPts[si],b:actionPts[a],w}); } for(let h=0;h<HIDDEN_COUNT;h++){ const w=bsel[row+SENSOR_COUNT+h]; if(Math.abs(w)>.25) lines.push({a:hiddenPts[h],b:actionPts[a],w}); } }
+  lines.sort((a,b)=>Math.abs(b.w)-Math.abs(a.w));
+  for(const L of lines.slice(0,72)){ bctx.strokeStyle=L.w>0?'rgba(112,247,255,.42)':'rgba(255,79,216,.42)'; bctx.lineWidth=clamp(Math.abs(L.w),.4,3.2); bctx.beginPath(); bctx.moveTo(...L.a); bctx.lineTo(...L.b); bctx.stroke(); }
+  function node(p,c,label){ bctx.fillStyle=c; bctx.beginPath(); bctx.arc(p[0],p[1],3.2,0,TAU); bctx.fill(); bctx.fillStyle='#9fdcb4'; bctx.font='9px ui-monospace'; bctx.fillText(label,p[0]+5,p[1]+3); }
+  sensorPts.forEach((p,i)=>node(p,'#ffd36f',(i<BASE_SENSOR_NAMES.length && i%2===0)?SENSOR_NAMES[i]:'')); hiddenPts.forEach((p,i)=>node(p,'#74ff9c','h'+i)); actionPts.forEach((p,i)=>node(p,'#70f7ff',ACTION_NAMES[i]));
+}
+function updateTelemetry(){
+  const stats=lastStats[selectedSpecies]; const repr=stats?.repr;
+  const sensorDiv=document.getElementById('sensorList'), actionDiv=document.getElementById('actionList'), geneDiv=document.getElementById('geneList');
+  if(!repr){ sensorDiv.innerHTML='<div class="tiny">snapshot pending</div>'; actionDiv.innerHTML=''; geneDiv.innerHTML=''; drawBrain(); return; }
+  const sensors=computeSensorsJS(repr,selectedSpecies); const {actions}=runBrainJS(selectedSpecies,sensors,repr.variant);
+  sensorDiv.innerHTML = topSensorMeters(sensors);
+  actionDiv.innerHTML = ACTION_NAMES.map((n,i)=>meter(n,actions[i])).join('');
+  const s=species[selectedSpecies]; const lines=[];
+  for(let a=0;a<ACTION_COUNT;a++){ const row=BO.W2+a*(SENSOR_COUNT+HIDDEN_COUNT); for(let si=0;si<SENSOR_COUNT;si++){ const bsel=s.brainVariants?.[repr.variant] || s.brain; const w=bsel[row+si], act=Math.abs(w*sensors[si]); if(act>.06) lines.push({txt:`${SENSOR_NAMES[si]} → ${ACTION_NAMES[a]}`,w,act}); } }
+  lines.sort((a,b)=>b.act-a.act);
+  geneDiv.innerHTML=lines.slice(0,8).map(g=>`<div class="geneLine"><b>${g.w>=0?'+':'−'}${Math.abs(g.w).toFixed(2)}</b> ${g.txt}</div>`).join('') || '<div class="tiny">no strong direct sensor→action wiring active</div>';
+  drawBrain();
+}
+function meter(name,v){ const pct=clamp((v+1)/2*100,0,100); return `<div class="meterRow"><div class="meterName"><span>${name}</span><b>${v.toFixed(2)}</b></div><div class="meterTrack"><i class="meterFill" style="width:${pct}%"></i></div></div>`; }
+function topSensorMeters(values){
+  const always = Array.from({length:BASE_SENSOR_NAMES.length},(_,i)=>i);
+  const social = values.map((v,i)=>({i,v,mag:Math.abs(v)})).filter(x=>x.i>=BASE_SENSOR_NAMES.length).sort((a,b)=>b.mag-a.mag).slice(0,10).map(x=>x.i);
+  const ids=[...always,...social];
+  return ids.map(i=>meter(SENSOR_NAMES[i], values[i] ?? 0)).join('');
+}
+
+
+function recordGenerationStats(){
+  const entry={
+    gen:generation, arena:settings.arena, best:lastBest, avg:lastAvg, div:lastDiversity,
+    alive:lastAliveAvg, progress:lastProgressAvg, energy:lastEnergyAvg,
+    species:lastStats.map(st=>({i:st.i,fit:st.fitness,alive:st.aliveFrac,progress:st.avgProgress,energy:st.avgEnergy,count:st.count,score:st.avgScore,speed:st.avgSpeed,role:st.role,chemOut:st.chemOut,chemIn:st.chemIn}))
+  };
+  history.push(entry); if(history.length>360) history.shift();
+  drawAnalytics();
+}
+function drawAnalytics(){
+  if(!hctx) return;
+  const W=historyCanvas.width,H=historyCanvas.height;
+  hctx.clearRect(0,0,W,H); hctx.fillStyle='#010604'; hctx.fillRect(0,0,W,H);
+  hctx.strokeStyle='rgba(44,255,140,.16)'; hctx.lineWidth=1;
+  for(let x=0;x<=W;x+=36){ hctx.beginPath(); hctx.moveTo(x,0); hctx.lineTo(x,H); hctx.stroke(); }
+  for(let y=0;y<=H;y+=28){ hctx.beginPath(); hctx.moveTo(0,y); hctx.lineTo(W,y); hctx.stroke(); }
+  if(history.length<2){ hctx.fillStyle='#7eaa94'; hctx.font='11px ui-monospace'; hctx.fillText('analytics begin after generation 1',12,24); updateAnalyticsTable(); return; }
+  const maxBest=Math.max(1,...history.map(h=>h.best));
+  const maxAvg=Math.max(1,...history.map(h=>h.avg));
+  function plot(vals,color,maxv){
+    hctx.strokeStyle=color; hctx.lineWidth=1.7; hctx.beginPath();
+    vals.forEach((v,i)=>{ const x=i/(vals.length-1)*W; const y=H-8-clamp(v/maxv,0,1)*(H-18); if(i===0) hctx.moveTo(x,y); else hctx.lineTo(x,y); });
+    hctx.stroke();
+  }
+  plot(history.map(h=>h.best),'rgba(112,247,255,.95)',maxBest);
+  plot(history.map(h=>h.avg),'rgba(121,255,159,.80)',maxBest);
+  plot(history.map(h=>h.alive*maxBest),'rgba(255,211,111,.70)',maxBest);
+  hctx.fillStyle='#bfffd4'; hctx.font='10px ui-monospace';
+  hctx.fillText('cyan best | green avg | amber alive-rate',8,13);
+  const last=history[history.length-1];
+  hctx.fillStyle='#ffd36f'; hctx.fillText(`${ARENA_NAMES[last.arena]||last.arena}  gen ${last.gen}`,8,H-7);
+  updateAnalyticsTable();
+}
+function updateAnalyticsTable(){
+  const el=document.getElementById('analyticsTable'); if(!el) return;
+  const rows=[...(lastStats||[])].sort((a,b)=>b.fitness-a.fitness);
+  el.innerHTML=`<div class="specRow head"><span>slot</span><span>species</span><span>fit</span><span>alive</span><span>prog</span><span>energy</span><span>role</span></div>` + rows.map(st=>{
+    const [r,g,b]=hueRgb(fixedSpeciesHue(st.i)); const col=`rgb(${Math.round(r*255)},${Math.round(g*255)},${Math.round(b*255)})`;
+    const name=species[st.i]?.name || `S${st.i}`;
+    return `<div class="specRow"><span><i class="specSwatch" style="color:${col};background:${col}"></i>S${st.i}</span><span>${name}</span><span>${fmt(st.fitness)}</span><span>${(st.aliveFrac*100).toFixed(0)}%</span><span>${st.avgProgress.toFixed(2)}</span><span>${st.avgEnergy.toFixed(2)}</span><span>${st.role||'generalist'}</span></div>`;
+  }).join('');
+  const a=document.getElementById('rSurvive'), p=document.getElementById('rProgress'), e=document.getElementById('rEnergy');
+  if(a) a.textContent=`${(lastAliveAvg*100).toFixed(0)}%`;
+  if(p) p.textContent=lastProgressAvg.toFixed(2);
+  if(e) e.textContent=lastEnergyAvg.toFixed(2);
+}
+
+function trailIndexJS(x,y,ch,src){ return (((src*TRAIL_CHANNELS+ch)*TRAIL_H+y)*TRAIL_W+x); }
+function drawTrailOverlay(){
+  const ch=clamp(Math.floor(settings.trailViewChannel),0,TRAIL_CHANNELS-1);
+  const src=Number(settings.trailViewSpecies);
+  const cw=WORLD.w/TRAIL_W, chh=WORLD.h/TRAIL_H;
+  let maxv=1;
+  for(let y=0;y<TRAIL_H;y++) for(let x=0;x<TRAIL_W;x++){
+    if(src>=0) maxv=Math.max(maxv,lastTrailSnapshot[trailIndexJS(x,y,ch,src)]||0);
+    else for(let s=0;s<speciesCount;s++) maxv=Math.max(maxv,lastTrailSnapshot[trailIndexJS(x,y,ch,s)]||0);
+  }
+  for(let y=0;y<TRAIL_H;y++) for(let x=0;x<TRAIL_W;x++){
+    let v=0, hue=0.50;
+    if(src>=0){ v=lastTrailSnapshot[trailIndexJS(x,y,ch,src)]||0; hue=fixedSpeciesHue(src); }
+    else { for(let s=0;s<speciesCount;s++){ const vv=lastTrailSnapshot[trailIndexJS(x,y,ch,s)]||0; if(vv>v){v=vv; hue=fixedSpeciesHue(s);} } }
+    const a=clamp(v/maxv,0,1); if(a<0.04) continue;
+    const [r,g,b]=hueRgb(ch===0?hue:(ch===1?0.97:(ch===2?0.33:0.78)));
+    octx.fillStyle=`rgba(${Math.round(r*255)},${Math.round(g*255)},${Math.round(b*255)},${0.03+0.20*a})`;
+    octx.fillRect(x*cw,y*chh,cw+0.75,chh+0.75);
+  }
+}
+function drawOverlay(){
+  octx.clearRect(0,0,WORLD.w,WORLD.h);
+  if(settings.trails && lastSnapshot){
+    trailPoints.push(lastSnapshot); if(trailPoints.length>5) trailPoints.shift();
+    for(let ti=0;ti<trailPoints.length;ti++){ const arr=trailPoints[ti]; octx.globalAlpha=(ti+1)/(trailPoints.length*9); for(let i=0;i<particleCount;i+=Math.max(1,Math.floor(particleCount/1800))){ const o=i*PARTICLE_STRIDE, sp=Math.floor(arr[o+4]); const [r,g,b]=hueRgb(species[sp]?.hue||0); octx.fillStyle=`rgb(${r*255},${g*255},${b*255})`; octx.fillRect(arr[o]-1,arr[o+1]-1,2,2); } }
+    octx.globalAlpha=1;
+  }
+  if(settings.showPheromones && lastTrailSnapshot){
+    drawTrailOverlay();
+  }
+  if(settings.showEnv){
+    for(const z of zoneList){
+      if(z.type===TYPE_WAYPOINT){ octx.strokeStyle='rgba(255,211,111,.82)'; octx.lineWidth=2; octx.beginPath(); octx.arc(z.x,z.y,z.r,0,TAU); octx.stroke(); octx.fillStyle='rgba(255,211,111,.08)'; octx.fill(); octx.fillStyle='#ffd36f'; octx.font='12px ui-monospace'; octx.fillText(String(z.order),z.x-4,z.y+4); }
+      else if(z.type===TYPE_FOOD){ octx.strokeStyle='rgba(112,247,255,.45)'; octx.fillStyle='rgba(112,247,255,.06)'; octx.beginPath(); octx.arc(z.x,z.y,z.r,0,TAU); octx.fill(); octx.stroke(); }
+      else if(z.type===TYPE_HAZARD){ octx.strokeStyle='rgba(255,93,115,.55)'; octx.fillStyle='rgba(255,93,115,.10)'; octx.beginPath(); octx.arc(z.x,z.y,z.r,0,TAU); octx.fill(); octx.stroke(); }
+      else if(z.type===TYPE_WALL){ octx.fillStyle='rgba(255,79,216,.16)'; octx.strokeStyle='rgba(255,79,216,.55)'; octx.lineWidth=1.5; octx.fillRect(z.x-z.r,z.y-z.a,z.r*2,z.a*2); octx.strokeRect(z.x-z.r,z.y-z.a,z.r*2,z.a*2); }
+    }
+  }
+  // Matrix hover spotlight is now rendered directly in WebGPU, so it stays
+  // current with live particle positions instead of relying on delayed snapshots.
+}
+function drawMatrix(){
+  const n=speciesCount, W=mCanvas.width, cell=W/n;
+  mctx.clearRect(0,0,W,W); mctx.fillStyle='#020805'; mctx.fillRect(0,0,W,W);
+  for(let a=0;a<n;a++) for(let b=0;b<n;b++){
+    const o=pairOffset(a,b), strength=inter[o+1], radius=inter[o];
+    const mag=clamp(Math.abs(strength)/1.6,0,1), alpha=.18+.75*mag;
+    mctx.fillStyle=strength>=0?`rgba(112,247,255,${alpha})`:`rgba(255,79,216,${alpha})`;
+    mctx.fillRect(b*cell+1,a*cell+1,cell-2,cell-2);
+    mctx.strokeStyle='rgba(2,8,5,.85)'; mctx.lineWidth=1; mctx.strokeRect(b*cell+1,a*cell+1,cell-2,cell-2);
+    mctx.strokeStyle='rgba(255,211,111,.50)'; mctx.lineWidth=clamp(radius/70,.5,2.5); mctx.beginPath(); mctx.arc(b*cell+cell/2,a*cell+cell/2,clamp(radius/230*cell,2,cell*.42),0,TAU); mctx.stroke();
+    const use=clamp((matrixUse[a*MAX_SPECIES+b]||0)/Math.max(1,matrixUseMax),0,1);
+    if(use>0.03){ mctx.fillStyle=`rgba(255,255,255,${0.12+0.55*use})`; mctx.beginPath(); mctx.arc(b*cell+cell/2,a*cell+cell/2,Math.max(1.5,cell*.08+cell*.20*use),0,TAU); mctx.fill(); }
+  }
+  if(selectedCell){ mctx.strokeStyle='#70f7ff'; mctx.lineWidth=3; mctx.strokeRect(selectedCell.b*cell+3,selectedCell.a*cell+3,cell-6,cell-6); }
+  if(hoverCell){ mctx.strokeStyle='#ffd36f'; mctx.lineWidth=2; mctx.strokeRect(hoverCell.b*cell+2,hoverCell.a*cell+2,cell-4,cell-4); }
+  mctx.fillStyle='#bfffd4'; mctx.font='10px ui-monospace'; for(let i=0;i<n;i++){ mctx.fillText(i,4,i*cell+12); mctx.fillText(i,i*cell+cell-10,W-5); }
+}
+function updateMatrixInfo(){
+  const el=document.getElementById('matrixInfo');
+  const c=hoverCell || selectedCell;
+  if(!c){ el.innerHTML='Rows = moving species. Columns = neighbor species. Cyan attracts; magenta repels. Click to pin a pair. Wheel = strength, Shift+wheel = radius. If Matrix evolves is off, this becomes a hand-authored ecological force field.'; updatePairBox(); return; }
+  const o=pairOffset(c.a,c.b); const st=inter[o+1], r=inter[o]; const use=matrixUse[c.a*MAX_SPECIES+c.b]||0;
+  el.innerHTML=`<b>${hoverCell?'hover':'selected'}: species ${c.a} ← species ${c.b}</b><br>strength <span style="color:${st>=0?'#70f7ff':'#ff4fd8'}">${st.toFixed(3)}</span><br>radius <span style="color:#ffd36f">${r.toFixed(1)} px</span><br>live salience <span style="color:#ffffff">${(use/Math.max(1,matrixUseMax)).toFixed(3)}</span><br><br>Particles of row species ${c.a} are ${st>=0?'attracted toward':'repelled away from'} particles of column species ${c.b} inside this radius. White glow means this relationship is actually active in the current ecosystem.`;
+  updatePairBox();
+}
+function updateCards(){
+  const cards=document.getElementById('cards');
+  cards.innerHTML='';
+  const maxFit=Math.max(1,...species.map(s=>Math.max(0,s.fitness)));
+  species.forEach((s,i)=>{
+    const div=document.createElement('div'); div.className='card'+(i===selectedSpecies?' sel':'');
+    const [r,g,b]=hueRgb(fixedSpeciesHue(i)); const col=`rgb(${r*255},${g*255},${b*255})`;
+    div.innerHTML=`<div class="cardName" style="color:${col}">S${i} ${s.name}</div><div class="bar"><i style="width:${clamp(s.fitness/maxFit*100,2,100)}%"></i></div><span class="pill">fit ${fmt(s.fitness)}</span><span class="pill">pop ${s.count||0}</span><span class="pill">alive ${s.alive||0}</span><span class="pill">${s.role||'generalist'}</span><span class="pill">var ${settings.variantCount}</span>`;
+    div.onclick=()=>{selectedSpecies=i; updateCards(); drawMatrix(); updateTelemetry();};
+    cards.appendChild(div);
+  });
+  updateTrailSpeciesSelect();
+}
+function updateHud(){
+  document.getElementById('rGen').textContent=generation;
+  document.getElementById('rStep').textContent=`${simStep}/${settings.stepsPerGeneration}`;
+  document.getElementById('rPart').textContent=particleCount.toLocaleString();
+  document.getElementById('rBest').textContent=fmt(lastBest);
+  document.getElementById('rAvg').textContent=fmt(lastAvg);
+  document.getElementById('rDiv').textContent=fmt(lastDiversity);
+  const rs=document.getElementById('rSurvive'), rp=document.getElementById('rProgress'), re=document.getElementById('rEnergy');
+  if(rs) rs.textContent=`${(lastAliveAvg*100).toFixed(0)}%`; if(rp) rp.textContent=lastProgressAvg.toFixed(2); if(re) re.textContent=lastEnergyAvg.toFixed(2);
+  let msg=`${ARENA_NAMES[settings.arena]||settings.arena}: lesson ${arenaGenerationCount}/${settings.lessonGens}, dt ${settings.dt.toFixed(3)}, damping ${settings.friction.toFixed(3)}, ${settings.speed} GPU ticks/frame. Brains evolve ${settings.variantCount} variants/species ${settings.chemistryEvolves?'+ chemistry mutates':'against locked chemistry'}. Selected S${selectedSpecies}. Trail fields ${settings.trailEmitScale>0?'active':'muted'}.`;
+  if(settings.curriculum && settings.arena!=='custom') msg+=` Curriculum auto-advance is armed${settings.curriculumLoop?', looping at end':''}.`;
+  if(!settings.chemistryEvolves) msg+=` Chemistry is locked; brains are adapting to your fixed force ecology.`;
+  if(settings.arena==='custom' && customZones.length===0) msg+=` Custom canvas is blank — enable edit mode and place food/goals/hazards/walls.`;
+  if(lastStats[selectedSpecies]) msg+=` Representative fitness ${fmt(species[selectedSpecies].fitness)}, population ${species[selectedSpecies].count}.`;
+  if(settings.samples<particleCount/16) msg+=` Sampling ${settings.samples} neighbors/particle: faster, approximate ecology.`;
+  document.getElementById('shipLine').textContent=msg;
+  document.getElementById('bPause').textContent=paused?'resume':'pause'; document.getElementById('bPause').classList.toggle('active',paused);
+  document.getElementById('bHelp').classList.toggle('active',settings.hints);
+}
+function bindRange(id,key,display=(v)=>v){ const el=document.getElementById(id), val=document.getElementById(id+'V'); el.value=settings[key]; const upd=()=>{ settings[key]=Number(el.value); val.textContent=display(settings[key]); if(key==='speciesCount'||key==='totalParticles'||key==='variantCount'){ scheduleResetNeeded(); } }; el.addEventListener('input',upd); upd(); }
+let resetNeeded=false; function scheduleResetNeeded(){ resetNeeded=true; document.getElementById('shipLine').textContent='Particle/species count changed. Press reset or seeded to respawn buffers.'; }
+function toggleBtn(id,key){ const b=document.getElementById(id); const render=()=>{ b.textContent=settings[key]?'on':'off'; b.classList.toggle('active',!!settings[key]); }; b.onclick=()=>{settings[key]=!settings[key]; render(); if(key==='customEdit') updateCustomStatus(); updateHud();}; render(); }
+function uploadMatrix(){ if(queue&&interBuf) queue.writeBuffer(interBuf,0,inter); drawMatrix(); updateMatrixInfo(); }
+function pairTarget(){ return hoverCell || selectedCell; }
+function setPair(a,b,strength=null,radius=null){ const o=pairOffset(a,b); if(radius!==null) inter[o]=clamp(radius,8,240); if(strength!==null) inter[o+1]=clamp(strength,-2.2,2.2); }
+function selectedPairText(c){ if(!c) return 'No pair selected. Click a cell to pin it; hover previews. Matrix evolution: '+(settings.chemistryEvolves?'ON':'LOCKED'); const o=pairOffset(c.a,c.b); return `Pinned S${c.a} ← S${c.b} | strength ${inter[o+1].toFixed(3)} | radius ${inter[o].toFixed(1)} px | matrix evolution ${(settings.chemistryEvolves?'ON':'LOCKED')}`; }
+function updatePairBox(){ const box=document.getElementById('selectedPairBox'); if(box) box.textContent=selectedPairText(selectedCell); }
+function applyMatrixPreset(mode){
+  for(let a=0;a<speciesCount;a++) for(let b=0;b<speciesCount;b++){
+    const o=pairOffset(a,b); let radius=75, strength=0.08;
+    if(mode==='soft'){ radius=96; strength=a===b?0.22:0.13; }
+    else if(mode==='self'){ radius=a===b?78:52; strength=a===b?0.38:-0.03; }
+    else if(mode==='blocks'){ const blockA=Math.floor(a/Math.max(1,Math.ceil(speciesCount/3))), blockB=Math.floor(b/Math.max(1,Math.ceil(speciesCount/3))); radius=blockA===blockB?92:128; strength=blockA===blockB?(a===b?0.34:0.22):0.08; if((blockA+blockB)%2===1 && blockA!==blockB) strength=-0.08; }
+    else if(mode==='predator'){ radius=110; const prey=(a+1)%speciesCount, predator=(a+speciesCount-1)%speciesCount; strength=b===prey?0.55:(b===predator?-0.42:(a===b?0.10:0.02)); }
+    else if(mode==='checker'){ radius=88; strength=((a+b)%2===0)?0.28:-0.24; if(a===b) strength=0.18; }
+    else if(mode==='random'){ radius=rand(130,24); strength=gauss()*0.32 + (a===b?0.10:0); }
+    inter[o]=clamp(radius,8,240); inter[o+1]=clamp(strength,-2.2,2.2);
+  }
+  uploadMatrix();
+}
+function symmetrizeMatrix(){ for(let a=0;a<speciesCount;a++) for(let b=a+1;b<speciesCount;b++){ const ab=pairOffset(a,b), ba=pairOffset(b,a); const r=(inter[ab]+inter[ba])*.5, s=(inter[ab+1]+inter[ba+1])*.5; inter[ab]=inter[ba]=r; inter[ab+1]=inter[ba+1]=s; } uploadMatrix(); }
+function invertMatrix(){ for(let a=0;a<speciesCount;a++) for(let b=0;b<speciesCount;b++){ inter[pairOffset(a,b)+1]*=-1; } uploadMatrix(); }
+function zeroMatrix(){ for(let a=0;a<speciesCount;a++) for(let b=0;b<speciesCount;b++){ inter[pairOffset(a,b)+1]=0; } uploadMatrix(); }
+function editPinnedPair(kind){ const c=pairTarget(); if(!c) return; const o=pairOffset(c.a,c.b), r=inter[o]; if(kind==='attract') setPair(c.a,c.b,Math.max(0.20,Math.abs(inter[o+1])),r); else if(kind==='repel') setPair(c.a,c.b,-Math.max(0.20,Math.abs(inter[o+1])),r); else if(kind==='neutral') setPair(c.a,c.b,0,r); else if(kind==='mirror'){ const s=inter[o+1], rr=inter[o]; setPair(c.b,c.a,s,rr); } uploadMatrix(); }
+
+function populateArenaSelect(){
+  const sel=document.getElementById('arenaSel');
+  sel.innerHTML='';
+  const custom=document.createElement('option'); custom.value='custom'; custom.textContent=ARENA_META.custom.name + ' — sandbox'; sel.appendChild(custom);
+  const groups={nursery:document.createElement('optgroup'), gentle:document.createElement('optgroup'), moderate:document.createElement('optgroup'), hard:document.createElement('optgroup'), 'very hard':document.createElement('optgroup'), experimental:document.createElement('optgroup')};
+  groups.nursery.label='Progression: nursery'; groups.gentle.label='Progression: gentle'; groups.moderate.label='Progression: moderate'; groups.hard.label='Progression: hard'; groups['very hard'].label='Progression: very hard'; groups.experimental.label='Experimental / legacy harsh';
+  for(const id of ARENA_SEQUENCE){ const meta=ARENA_META[id]; const opt=document.createElement('option'); opt.value=id; opt.textContent=`${meta.name} — ${meta.tier}`; (groups[meta.tier]||groups.moderate).appendChild(opt); }
+  Object.values(groups).forEach(g=>sel.appendChild(g));
+  sel.value=settings.arena;
+}
+function setArena(id,respawn=true){
+  settings.arena=id; arenaGenerationCount=0; simStep=0; simTime=0;
+  const sel=document.getElementById('arenaSel'); if(sel) sel.value=id;
+  if(respawn){ spawnParticles(); uploadAll(); }
+  drawOverlay(); updateHud();
+}
+function curriculumIndex(){ return Math.max(0,ARENA_SEQUENCE.indexOf(settings.arena)); }
+function changeLesson(delta){
+  const idx=curriculumIndex();
+  let ni=idx+delta;
+  if(settings.curriculumLoop){ ni=(ni%ARENA_SEQUENCE.length+ARENA_SEQUENCE.length)%ARENA_SEQUENCE.length; }
+  else { ni=clamp(ni,0,ARENA_SEQUENCE.length-1); }
+  const next=ARENA_SEQUENCE[ni];
+  setArena(next,true);
+}
+function maybeAdvanceCurriculum(){
+  if(!settings.curriculum || settings.arena==='custom') return;
+  if(arenaGenerationCount >= settings.lessonGens){
+    const idx=curriculumIndex();
+    let ni=idx+1;
+    if(ni>=ARENA_SEQUENCE.length){ ni=settings.curriculumLoop?0:ARENA_SEQUENCE.length-1; }
+    settings.arena=ARENA_SEQUENCE[ni];
+    arenaGenerationCount=0;
+    const sel=document.getElementById('arenaSel'); if(sel) sel.value=settings.arena;
+  }
+}
+function addPanelControls(){
+  ['hud','lab','matrixDock','analytics','champions'].forEach(id=>{
+    const panel=document.getElementById(id); if(!panel || panel.querySelector('.panelBar')) return;
+    const title=panel.querySelector('.title'); if(!title) return;
+    const bar=document.createElement('div'); bar.className='panelBar';
+    title.parentNode.insertBefore(bar,title); bar.appendChild(title);
+    const btn=document.createElement('button'); btn.className='minBtn'; btn.textContent='−'; btn.title='minimize panel';
+    btn.onclick=()=>{ panel.classList.toggle('collapsed'); btn.textContent=panel.classList.contains('collapsed')?'□':'−'; };
+    bar.appendChild(btn);
+  });
+}
+function setPanelHidden(id,hide){ const el=document.getElementById(id); if(el) el.classList.toggle('hiddenPanel',hide); }
+function togglePanelHidden(id){ const el=document.getElementById(id); if(el) el.classList.toggle('hiddenPanel'); }
+function simPosFromEvent(e){ const r=gpuCanvas.getBoundingClientRect(); return [(e.clientX-r.left)/r.width*WORLD.w,(e.clientY-r.top)/r.height*WORLD.h]; }
+function zoneHitTest(x,y){
+  let best=-1,bestD=1e9;
+  for(let i=0;i<customZones.length;i++){
+    const z=customZones[i]; let d;
+    if(z.type===TYPE_WALL){ const dx=Math.max(Math.abs(x-z.x)-z.r,0), dy=Math.max(Math.abs(y-z.y)-z.a,0); d=Math.hypot(dx,dy); }
+    else d=Math.hypot(x-z.x,y-z.y)-z.r;
+    if(d<bestD){ bestD=d; best=i; }
+  }
+  return bestD<28 ? best : -1;
+}
+function addCustomZoneAt(x,y){
+  const tool=settings.customTool;
+  if(tool==='select'){ selectedCustomZone=zoneHitTest(x,y); customDragIndex=selectedCustomZone; updateCustomStatus(); return; }
+  if(tool==='erase'){ const hit=zoneHitTest(x,y); if(hit>=0){ customZones.splice(hit,1); selectedCustomZone=-1; uploadZones(); drawOverlay(); updateCustomStatus(); } return; }
+  const order=customZones.filter(z=>z.type===TYPE_WAYPOINT).length;
+  const type=tool==='waypoint'?TYPE_WAYPOINT:tool==='food'?TYPE_FOOD:tool==='hazard'?TYPE_HAZARD:TYPE_WALL;
+  const value=tool==='waypoint'?settings.customValue:(tool==='food'?Math.max(.1,settings.customValue/90):(tool==='hazard'?Math.max(.1,settings.customValue/130):0));
+  customZones.push({type,x:clamp(x,0,WORLD.w),y:clamp(y,0,WORLD.h),r:settings.customRadius,a:type===TYPE_WALL?settings.customWallH:0,value,order,phase:tool==='food'?0:0});
+  selectedCustomZone=customZones.length-1; customDragIndex=selectedCustomZone;
+  if(settings.arena!=='custom') setArena('custom',true); else { uploadZones(); drawOverlay(); }
+  updateCustomStatus();
+}
+function updateCustomStatus(){
+  const el=document.getElementById('customStatus'); if(!el) return;
+  const z=customZones[selectedCustomZone];
+  const names={1:'goal',2:'food',3:'hazard',4:'barrier'};
+  el.innerHTML=settings.customEdit ? `EDIT ON — tool <b>${settings.customTool}</b>. ${z?`Selected <span class="zoneSelected">${names[z.type]||'object'} #${selectedCustomZone}</span> at ${z.x.toFixed(0)},${z.y.toFixed(0)}.`:'No object selected.'}` : `Edit mode off. Custom objects: ${customZones.length}.`;
+}
+function seedCustomGarden(){
+  const cx=WORLD.w/2, cy=WORLD.h/2; customZones=[];
+  customZones.push({type:TYPE_WAYPOINT,x:cx,y:cy,r:64,a:0,value:180,order:0,phase:0});
+  customZones.push({type:TYPE_FOOD,x:cx,y:cy,r:95,a:0,value:2.4,order:0,phase:0});
+  customZones.push({type:TYPE_FOOD,x:230,y:175,r:48,a:0,value:1.3,order:0,phase:0});
+  customZones.push({type:TYPE_FOOD,x:800,y:485,r:48,a:0,value:1.3,order:0,phase:0});
+  customZones.push({type:TYPE_HAZARD,x:cx,y:cy+160,r:44,a:0,value:1.0,order:0,phase:0});
+  selectedCustomZone=-1; setArena('custom',true); updateCustomStatus();
+}
+function initCustomPointerEvents(){
+  gpuCanvas.addEventListener('pointerdown',e=>{
+    if(!settings.customEdit) return;
+    e.preventDefault(); const [x,y]=simPosFromEvent(e); addCustomZoneAt(x,y);
+  });
+  gpuCanvas.addEventListener('pointermove',e=>{
+    if(!settings.customEdit || customDragIndex<0) return;
+    e.preventDefault(); const [x,y]=simPosFromEvent(e); const z=customZones[customDragIndex]; if(!z) return;
+    z.x=clamp(x,0,WORLD.w); z.y=clamp(y,0,WORLD.h); uploadZones(); drawOverlay(); updateCustomStatus();
+  });
+  window.addEventListener('pointerup',()=>{customDragIndex=-1;});
+}
+
+function updateTrailSpeciesSelect(){
+  const sel=document.getElementById('trailSpeciesSel'); if(!sel) return;
+  const prev=String(settings.trailViewSpecies);
+  sel.innerHTML='<option value="-1">all species</option>'+Array.from({length:speciesCount},(_,i)=>`<option value="${i}">S${i} ${species[i]?.name||''}</option>`).join('');
+  sel.value=prev; sel.onchange=e=>{settings.trailViewSpecies=Number(e.target.value); drawOverlay();};
+  const ch=document.getElementById('trailChannelSel'); if(ch){ ch.value=String(settings.trailViewChannel); ch.onchange=e=>{settings.trailViewChannel=Number(e.target.value); drawOverlay();}; }
+}
+function biasSelectedTrail(kind){
+  const s=species[selectedSpecies]; if(!s) return;
+  syncRepresentativeBrain(s);
+  const b=s.brainVariants?.[0] || s.brain;
+  const emitIndex = kind==='food'?10:kind==='danger'?11:kind==='kin'?12:13;
+  const sensorBase = kind==='food'?4:kind==='danger'?6:12;
+  const row = BO.W2 + emitIndex*(SENSOR_COUNT+HIDDEN_COUNT);
+  b[row + sensorBase] += 0.35; b[row + sensorBase + 1] += 0.35;
+  for(let v=1; v<MAX_VARIANTS; v++) s.brainVariants[v]=mutateBrain(b, settings.variantMutationRate*(0.6+v*0.08));
+  refreshSpeciesBuffers(); queue.writeBuffer(brainBuf,0,brainData); updateTelemetry();
+}
+
+function initUI(){
+  addPanelControls(); populateArenaSelect(); initCustomPointerEvents();
+  bindRange('particles','totalParticles',v=>v.toLocaleString()); bindRange('speciesCount','speciesCount'); bindRange('variantCount','variantCount'); bindRange('variantMut','variantMutationRate',v=>v.toFixed(3)); bindRange('samples','samples'); bindRange('stepsGen','stepsPerGeneration',v=>v.toLocaleString()); bindRange('speed','speed',v=>`${v} ticks`); bindRange('dt','dt',v=>v.toFixed(3)); bindRange('friction','friction',v=>v.toFixed(3)); bindRange('forceScale','forceScale',v=>v.toFixed(2)); bindRange('mut','mutationRate',v=>v.toFixed(3)); bindRange('chemMut','matrixMutationRate',v=>v.toFixed(3)); bindRange('chemProtect','chemistryProtection',v=>v.toFixed(2)); bindRange('forceSense','forceSenseScale',v=>v.toFixed(2)); bindRange('motorCost','motorCost',v=>v.toFixed(2)); bindRange('trailSense','trailSenseScale',v=>v.toFixed(2)); bindRange('trailEmit','trailEmitScale',v=>v.toFixed(2)); bindRange('trailDecay','trailDecay',v=>v.toFixed(3)); bindRange('selFrac','selectionFrac',v=>v.toFixed(2)); bindRange('lessonGens','lessonGens',v=>`${v} gen`); bindRange('customRadius','customRadius',v=>`${v.toFixed(0)} px`); bindRange('customWallH','customWallH',v=>`${v.toFixed(0)} px`); bindRange('customValue','customValue',v=>v.toFixed(1));
+  toggleBtn('crossBtn','crossover'); toggleBtn('warmBtn','warmStart'); toggleBtn('chemEvolveBtn','chemistryEvolves'); toggleBtn('highlightBtn','highlight'); toggleBtn('envBtn','showEnv'); toggleBtn('trailBtn','trails'); toggleBtn('trailOverlayBtn','showPheromones'); toggleBtn('curriculumBtn','curriculum'); toggleBtn('curriculumLoopBtn','curriculumLoop'); toggleBtn('customEditBtn','customEdit');
+  document.getElementById('arenaSel').value=settings.arena; document.getElementById('arenaSel').onchange=e=>setArena(e.target.value,true);
+  document.getElementById('bPause').onclick=()=>{paused=!paused; updateHud();};
+  document.getElementById('bNext').onclick=()=>{nextGenRequested=true;};
+  document.getElementById('bReset').onclick=()=>{settings.speciesCount=Math.round(settings.speciesCount); initEcosystem(false); resetNeeded=false;};
+  document.getElementById('bSeed').onclick=()=>{initEcosystem(true); resetNeeded=false;};
+  document.getElementById('bHelp').onclick=()=>{settings.hints=!settings.hints; updateHud();};
+  document.getElementById('bExport').onclick=exportJSON;
+  document.getElementById('bLab').onclick=()=>togglePanelHidden('lab');
+  document.getElementById('bMatrix').onclick=()=>togglePanelHidden('matrixDock');
+  document.getElementById('bCards').onclick=()=>togglePanelHidden('cards');
+  document.getElementById('bStats').onclick=()=>{ togglePanelHidden('analytics'); drawAnalytics(); };
+  document.getElementById('bVault').onclick=()=>{ togglePanelHidden('champions'); renderChampions(); };
+  document.getElementById('prevLesson').onclick=()=>changeLesson(-1);
+  document.getElementById('nextLesson').onclick=()=>changeLesson(1);
+  document.getElementById('restartArena').onclick=()=>setArena(settings.arena,true);
+  document.getElementById('customTool').value=settings.customTool; document.getElementById('customTool').onchange=e=>{settings.customTool=e.target.value; updateCustomStatus();};
+  document.getElementById('customBlank').onclick=()=>{customZones=[]; selectedCustomZone=-1; setArena('custom',true); updateCustomStatus();};
+  document.getElementById('customGarden').onclick=seedCustomGarden;
+  document.getElementById('customClear').onclick=()=>{customZones=[]; selectedCustomZone=-1; uploadZones(); drawOverlay(); updateCustomStatus();};
+  document.getElementById('clearTrails').onclick=clearTrailBuffers;
+  document.getElementById('trailFoodBias').onclick=()=>biasSelectedTrail('food');
+  document.getElementById('trailDangerBias').onclick=()=>biasSelectedTrail('danger');
+  document.getElementById('saveSelectedChamp').onclick=()=>archiveChampion(species[selectedSpecies], lastStats[selectedSpecies], true);
+  document.getElementById('seedChampionPool').onclick=()=>reseedFromChampion(selectedChampion>=0?selectedChampion:0);
+  document.getElementById('clearChampions').onclick=()=>{champions=[];selectedChampion=-1;renderChampions();};
+  updateTrailSpeciesSelect(); renderChampions(); updateCustomStatus();
+  mCanvas.addEventListener('mousemove',e=>{ const r=mCanvas.getBoundingClientRect(); const x=(e.clientX-r.left)/r.width*mCanvas.width, y=(e.clientY-r.top)/r.height*mCanvas.height; const cell=mCanvas.width/speciesCount; hoverCell={a:clamp(Math.floor(y/cell),0,speciesCount-1),b:clamp(Math.floor(x/cell),0,speciesCount-1)}; drawMatrix(); updateMatrixInfo(); });
+  mCanvas.addEventListener('mouseleave',()=>{hoverCell=null; drawMatrix(); updateMatrixInfo();});
+  mCanvas.addEventListener('click',()=>{ if(hoverCell){ selectedCell={...hoverCell}; selectedSpecies=hoverCell.a; updateCards(); updateTelemetry(); drawMatrix(); updateMatrixInfo(); }});
+  mCanvas.addEventListener('wheel',e=>{ const c=hoverCell||selectedCell; if(!c) return; e.preventDefault(); const o=pairOffset(c.a,c.b); const step=e.altKey?0.012:(e.ctrlKey||e.metaKey?0.11:0.035); if(e.shiftKey){ inter[o]=clamp(inter[o]+Math.sign(-e.deltaY)*(e.altKey?0.8:(e.ctrlKey||e.metaKey?10:3)),8,240); } else { inter[o+1]=clamp(inter[o+1]+Math.sign(-e.deltaY)*step,-2.2,2.2); } uploadMatrix(); },{passive:false});
+  document.getElementById('applyMatrixPreset').onclick=()=>applyMatrixPreset(document.getElementById('matrixPresetSel').value);
+  document.getElementById('symMatrix').onclick=symmetrizeMatrix;
+  document.getElementById('invertMatrix').onclick=invertMatrix;
+  document.getElementById('zeroMatrix').onclick=zeroMatrix;
+  document.getElementById('pairAttract').onclick=()=>editPinnedPair('attract');
+  document.getElementById('pairRepel').onclick=()=>editPinnedPair('repel');
+  document.getElementById('pairNeutral').onclick=()=>editPinnedPair('neutral');
+  document.getElementById('pairMirror').onclick=()=>editPinnedPair('mirror');
+}
+
+function cloneBrainArray(arr){ return Array.from(arr || []); }
+function cloneSpeciesSnapshot(src){
+  syncRepresentativeBrain(src);
+  return {
+    motor:src.motor, metab:src.metab, noise:src.noise, popWeight:src.popWeight,
+    brainVariants:(src.brainVariants||[]).map(cloneBrainArray), role:src.role||'generalist'
+  };
+}
+function archiveChampion(src, stat=null, manual=false){
+  if(!src) return;
+  const existingBest = champions.filter(c=>c.arena===settings.arena).reduce((m,c)=>Math.max(m,c.fitness||0),0);
+  if(!manual && existingBest>0 && src.fitness < existingBest*1.012 && generation%12!==0) return;
+  const row=Array.from(inter.slice(pairOffset(src.id,0), pairOffset(src.id,0)+speciesCount*PAIR_STRIDE));
+  const col=[]; for(let a=0;a<speciesCount;a++){ const o=pairOffset(a,src.id); col.push(inter[o],inter[o+1]); }
+  champions.push({
+    id:`C${generation}-${src.id}-${Math.floor(Math.random()*9999)}`, gen:generation, arena:settings.arena,
+    slot:src.id, name:src.name, fitness:src.fitness||0, role:src.role||stat?.role||'generalist',
+    alive:stat?.aliveFrac||0, progress:stat?.avgProgress||0, energy:stat?.avgEnergy||0,
+    species:cloneSpeciesSnapshot(src), row, col
+  });
+  champions.sort((a,b)=>(b.fitness||0)-(a.fitness||0));
+  champions=champions.slice(0,30);
+  renderChampions();
+}
+function championToSpecies(ch,slot,mut=0.01){
+  const snap=ch.species;
+  const baseVariants=(snap.brainVariants||[]).map(a=>new Float32Array(a));
+  const variants=[];
+  for(let v=0; v<MAX_VARIANTS; v++){
+    const src=baseVariants[v%Math.max(1,baseVariants.length)] || makeBrain(settings.warmStart);
+    variants.push(mutateBrain(src, mut*(v===0?0.25:1.0)));
+  }
+  return syncRepresentativeBrain({
+    id:slot,name:speciesName(slot),hue:fixedSpeciesHue(slot),motor:clamp(snap.motor+gauss()*mut,0.08,2.3),metab:clamp(snap.metab+gauss()*mut,0.2,2.5),noise:clamp(snap.noise+gauss()*mut,0,1.5),popWeight:clamp(snap.popWeight+gauss()*mut,0.08,4),
+    lineage:`vault:${ch.id}`,parent:[ch.slot,ch.slot],fitness:0,avgScore:0,count:0,alive:0,variantFitness:Array(MAX_VARIANTS).fill(0),brainVariants:variants,role:snap.role||ch.role
+  });
+}
+function injectChampion(idx=selectedChampion){
+  const ch=champions[idx]; if(!ch) return;
+  species[selectedSpecies]=championToSpecies(ch,selectedSpecies,settings.variantMutationRate*0.4);
+  refreshSpeciesBuffers(); spawnParticles(); uploadAll(); updateCards(); updateTelemetry(); updateHud();
+}
+function reseedFromChampion(idx=selectedChampion){
+  const ch=champions[idx]; if(!ch) return;
+  for(let i=0;i<speciesCount;i++) species[i]=championToSpecies(ch,i,settings.variantMutationRate*(0.5+i/speciesCount));
+  refreshSpeciesBuffers(); spawnParticles(); uploadAll(); updateCards(); updateTelemetry(); updateHud();
+}
+function renderChampions(){
+  const el=document.getElementById('championList'); if(!el) return;
+  if(!champions.length){ el.innerHTML='<div class="sub" style="padding:8px">No champions archived yet. They are saved automatically when a species meaningfully improves an arena, or use save selected.</div>'; return; }
+  el.innerHTML=champions.map((c,i)=>`<div class="champRow ${i===selectedChampion?'sel':''}"><span>G${c.gen}<br>S${c.slot}</span><span><b>${c.name}</b><br>${ARENA_NAMES[c.arena]||c.arena} · ${c.role}</span><span>fit<br>${fmt(c.fitness)}</span><span><button data-champ="${i}" data-act="inject">inject</button><button data-champ="${i}" data-act="seed">seed</button></span></div>`).join('');
+  el.querySelectorAll('button[data-champ]').forEach(btn=>btn.onclick=e=>{ selectedChampion=Number(btn.dataset.champ); if(btn.dataset.act==='inject') injectChampion(selectedChampion); else reseedFromChampion(selectedChampion); renderChampions(); });
+}
+
+function exportJSON(){
+  const data={version:'xenospecies-swarm-gpu-ecology-intelligence-lab-v5',settings,customZones,species:species.map(s=>({...s,brain:Array.from(s.brain),brainVariants:(s.brainVariants||[]).map(b=>Array.from(b))})),inter:Array.from(inter),champions,history,generation,arenaGenerationCount};
+  const txt=JSON.stringify(data,null,2); navigator.clipboard?.writeText(txt).then(()=>alert('Evolution state copied to clipboard.')).catch(()=>{console.log(txt);alert('Clipboard failed; JSON printed to console.');});
+}
+async function updateSnapshot(){
+  if(performance.now()<snapshotDue || snapshotPending || ending) return;
+  snapshotDue=performance.now()+650;
+  const snap=await readParticles();
+  const tr=await readTrails(); if(tr) lastTrailSnapshot=tr;
+  if(snap){ lastSnapshot=snap; aggregateSnapshot(snap); updateCards(); updateTelemetry(); drawMatrix(); drawAnalytics(); }
+}
+function animationLoop(){
+  if(!paused && !ending){
+    if(nextGenRequested || simStep>=settings.stepsPerGeneration){
+      endGeneration();
+    } else if(!resetNeeded){
+      const ticks=Math.max(1,Math.floor(settings.speed));
+      for(let k=0;k<ticks && !nextGenRequested && simStep<settings.stepsPerGeneration;k++){
+        const renderNow = (k===ticks-1) || (simStep+1>=settings.stepsPerGeneration);
+        gpuFrame(renderNow);
+      }
+    }
+  }
+  drawOverlay(); updateHud(); updateSnapshot(); requestAnimationFrame(animationLoop);
+}
+async function main(){
+  try{
+    await initGPU();
+    initUI(); initEcosystem(true);
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('hidden')); boot.remove();
+    animationLoop();
+  }catch(err){ bootText.innerHTML=`<span class="danger">${err.message}</span><br><br>This branch intentionally targets WebGPU-capable desktop/laptop hardware so brain execution and particle forces can run in shaders.`; console.error(err); }
+}
+main();
+</script>
+</body>
+</html>
