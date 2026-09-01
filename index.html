@@ -3,7 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>WebGPU Particle-Life + Sound-Wave Beacons</title>
+  <title>Redirecting to Xenospecies Swarm Auto Forge</title>
+  <meta http-equiv="refresh" content="0; url=xenospecies_swarm_auto_forge_editable_curriculum.html" />
+  <script>
+    window.location.replace('xenospecies_swarm_auto_forge_editable_curriculum.html');
+  </script>
   <style>
     body   { margin:0; background:#000; overflow:hidden; position:relative;
              color:#ddd; font-family:system-ui; }
@@ -250,6 +254,12 @@ fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-a
       primitive:{topology:'point-list'}
     });
 
+    /* ──────────── NEW: audio support ──────────── */
+    const AUDIO_FLAG = 2;                   // bit-mask for “wave comes from audio”
+    const audioCtx        = new (window.AudioContext || window.webkitAudioContext)();
+    const audioAnalysers  = Array(MAX_BEACONS).fill(null);   // per-beacon Analyser
+
+
     /********************  SECTION 1B ─ BEACON MODULE *********************
      * Delete this whole block to strip every beacon-related feature.
      ********************************************************************/
@@ -459,23 +469,111 @@ fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-a
        {position:'absolute',left:`${x+12}px`,top:`${y+12}px`,zIndex:1000});
       gui.title(title); activePanel=gui; return gui;
     }
+    function pickColumnFromCSV(text){
+      const lines = text.trim().split(/\r?\n/);
+      const comma = lines[0].includes(',');           // crude delimiter detect
+      const delim = comma ? ',' : /[\s;]+/;           // comma or whitespace/semicolon
+      const firstRow = lines[0].trim().split(delim);
+
+      // Decide if we have a header row (non-numeric tokens)
+      const hasHeader = firstRow.some(t => isNaN(+t));
+
+      const header = hasHeader ? firstRow
+                              : firstRow.map((_, i) => `col${i}`);
+
+      const pick = prompt(
+        `CSV columns:\n` +
+        header.map((h,i)=>`${i}: ${h}`).join('\n') +
+        `\n\nEnter one index (e.g. 2) or two separated by a comma for IQ (e.g. 0,1)`,
+        '0'
+      );
+      if (!pick) return null;
+
+      const cols = pick.split(',').map(s=>parseInt(s,10));
+      if (cols.some(n=>isNaN(n) || n<0 || n>=header.length)) return null;
+
+      const data = [], dataQ = [];
+      const start = hasHeader ? 1 : 0;
+
+      for (let r = start; r < lines.length; ++r) {
+        const cells = lines[r].trim().split(delim);
+        const v0 = parseFloat(cells[cols[0]]);
+        if (isNaN(v0)) continue;
+        data.push(v0);
+        if (cols.length === 2) {
+          const v1 = parseFloat(cells[cols[1]]);
+          dataQ.push(isNaN(v1) ? 0 : v1);
+        }
+      }
+      return { I: new Float32Array(data),
+              Q: cols.length === 2 ? new Float32Array(dataQ) : null };
+    }
 
     function loadCSVForBeacon(i){
       const el = Object.assign(document.createElement('input'),
                                {type:'file', accept:'.csv,.txt'});
       el.click();
       el.onchange = () => el.files?.[0]?.text().then(txt => {
-        const nums = txt.trim().split(/[,\s]+/).map(Number).filter(n=>!isNaN(n));
-        if(nums.length===0) return;
+        const sel = pickColumnFromCSV(txt);
+        if (!sel) { alert('No valid column chosen'); return; }
+
         const base = i * WAVE_LEN;
-        for(let j=0;j<WAVE_LEN;j++){
-          waveArr[base+j] = nums[j % nums.length];
+        const arr  = sel.I;                     // always at least I data
+        for (let j = 0; j < WAVE_LEN; ++j) {
+          waveArr[base + j] = arr[j % arr.length];
         }
-        beaconArr[beaconOffset(i)+WAVE_FLAG] = 1;
+
+        /* if user chose two columns treat as IQ -> set flag bit 2 */
+        if (sel.Q) {
+          beaconArr[beaconOffset(i)+WAVE_FLAG] = 1 | 4; // useWave | isIQ
+          // pack Q into the next beacon’s slot, or interleave—depends on your design
+        } else {
+          beaconArr[beaconOffset(i)+WAVE_FLAG] = 1;      // useWave only
+        }
+
         uploadWaves();
         uploadBeacons();
-      });
+      });}
+
+    function loadAudioForBeacon (i) {
+      const picker = Object.assign(document.createElement('input'),
+                                  { type:'file', accept:'audio/*' });
+      picker.click();
+
+      picker.onchange = async () => {
+        const file = picker.files?.[0];
+        if (!file) return;
+
+        /* decode the whole file ------------------------------------------------ */
+        const arrayBuf = await file.arrayBuffer();
+        const audioBuf = await audioCtx.decodeAudioData(arrayBuf);
+
+        /* one analyser ↔ one beacon ------------------------------------------- */
+        const src   = audioCtx.createBufferSource();
+        const ana   = audioCtx.createAnalyser();
+        ana.fftSize = WAVE_LEN * 2;              // time-domain buffer = 256 samples
+        src.buffer  = audioBuf;
+        src.loop    = true;
+        src.connect(ana);
+        ana.connect(audioCtx.destination);
+        src.start();
+
+        audioAnalysers[i] = ana;                 // remember it for the frame loop
+
+        /* mark the beacon: useWave + isAudio (1 | 2) -------------------------- */
+        beaconArr[beaconOffset(i) + WAVE_FLAG] = 1 | AUDIO_FLAG;
+        uploadBeacons();
+
+        /* give the user an immediate visual by seeding waveArr once ----------- */
+        const tmp = new Float32Array(WAVE_LEN);
+        ana.getFloatTimeDomainData(tmp);
+        const base = i * WAVE_LEN;
+        for (let j = 0; j < WAVE_LEN; ++j) waveArr[base + j] = tmp[j];
+        uploadWaves();
+      };
     }
+
+
     function openBeaconEditor(idx, px, py) {
       closePanel();
 
@@ -516,6 +614,9 @@ fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-a
         .onChange(v => { beaconArr[o + WAVE_FLAG] = v ? 1 : 0; uploadBeacons(); });
 
       gui.add({ loadCSV(){ loadCSVForBeacon(idx); } }, 'loadCSV').name('📄 Load CSV');
+      
+      gui.add({ loadAudio() { loadAudioForBeacon(idx); } }, 'loadAudio')
+        .name('🎵 Load Audio');
 
       gui.add(proxy,'grid')
         .name('λ-grid')
@@ -827,102 +928,69 @@ fn hue(h:f32)->vec3<f32>{ let r=clamp(abs(h*6.0-3.0)-1.0,0,1); let g=clamp(2.0-a
     drawOverlay();
     /* ******************** END OF BEACON MODULE *************************/
 
-    /********************  SECTION 1C ─ UI CONTROLS **********************/
+    /******************** SECTION 1C ─ UI CONTROLS **********************/
     const runtimeGUI=new GUI();
-    runtimeGUI.add(simParams,'dt',0.01,1,0.0001).name('Sim-seconds per-frame (s-sim)');
-    runtimeGUI.add(simParams,'friction',0.01,1,0.0001).name('Velocity damping (1 = no loss)');
-    runtimeGUI.add(simParams, 'C', 1, 500, 0.0001).name('Beacon wave speed (px · s-sim⁻¹)');
-    /********************  SECTION 1D ─ FILE I/O *************************
-     * Remove this block if you don’t need browser save/export.
-     ********************************************************************/
-    const fileOps={
-      save(){
-        const blob={
-          particleCount,kindCount,preset,simParams,
-          forces:Array.from(fData),beaconCount,
-          beacons:Array.from(beaconArr.slice(0,beaconCount*B_STRIDE)),
-          waves   : Array.from(waveArr)
-        };
-        localStorage.setItem('particleSimSave',JSON.stringify(blob));
-        alert('Saved to browser cache.');
-      },
-      async exportJSON(){
-        const raw=localStorage.getItem('particleSimSave');
-        if(!raw){alert('Nothing saved yet.');return;}
-        const data=JSON.parse(raw);
-        data._doc = {                    
-          particleCount : 'Total number of particles in the simulation.',
-          kindCount     : 'Number of distinct particle kinds / colours.',
-          preset        : '"Random" = random attraction table, "Sand" = zero attraction.',
-          simParams     : {
-            dt        : 'Simulation time-step.',
-            friction  : 'Velocity damping factor per step.'
-          },
-          forces        : '[radius, strength] pairs for every kind × kind interaction.',
-          beaconCount   : 'Number of active beacons in `beacons[]`.',
-          beacons       : 'Flattened array of beacons: [x, y, freq, amp, decay, phase, grid, useWave] …',
-          waves         : `Waveform samples per beacon (${WAVE_LEN} each)`
-        };
-        const json=JSON.stringify(data,null,2);
-        try{await navigator.clipboard.writeText(json);
-            alert('Save copied to clipboard 👍');}
-        catch{console.log(json); alert('Clipboard failed – see console.');}
-      }
-    };
+    runtimeGUI.add(simParams,'dt',0.01,1,0.0001).name('dt (s-sim)');
+    runtimeGUI.add(simParams,'friction',0.01,1,0.0001).name('friction');
+    runtimeGUI.add(simParams,'C',1,500,0.0001).name('wave speed C');
+
+    /******************** SECTION 1D ─ FILE I/O *************************/
+    const fileOps={ save(){ const blob={ particleCount,kindCount,preset,simParams, forces:Array.from(fData), beaconCount, beacons:Array.from(beaconArr.slice(0,beaconCount*B_STRIDE)), waves:Array.from(waveArr), ytLinks }; localStorage.setItem('particleSimSave',JSON.stringify(blob)); alert('Saved to browser cache.'); },
+      async exportJSON(){ const raw=localStorage.getItem('particleSimSave'); if(!raw){alert('Nothing saved yet.');return;} const data=JSON.parse(raw); data._doc='See original documentation plus ytLinks[] = YouTube URLs per beacon'; const txt=JSON.stringify(data,null,2); try{ await navigator.clipboard.writeText(txt); alert('Save copied to clipboard 👍'); }catch{ console.log(txt); alert('Clipboard failed – see console.'); } } };
     runtimeGUI.add(fileOps,'save').name('💾 Save');
     runtimeGUI.add(fileOps,'exportJSON').name('📋 Export');
 
-    /********************  SECTION 1E ─ SIM LOOP *************************/
-    const ctx=canvas.getContext('webgpu');
-    ctx.configure({device,format:navigator.gpu.getPreferredCanvasFormat(),
-                   alphaMode:'opaque'});
-    const compBG_A=device.createBindGroup({layout:cBGLayout,
-      entries:[{binding:0,resource:{buffer:bufA}},
-               {binding:1,resource:{buffer:bufB}},
-               {binding:2,resource:{buffer:fBuf}}]});
-    const compBG_B=device.createBindGroup({layout:cBGLayout,
-      entries:[{binding:0,resource:{buffer:bufB}},
-               {binding:1,resource:{buffer:bufA}},
-               {binding:2,resource:{buffer:fBuf}}]});
-    const simBG=device.createBindGroup({layout:uBGLayout,
-      entries:[{binding:0,resource:{buffer:uBuf}}]});
-    const beaconBG=device.createBindGroup({layout:bBGLayout,
-      entries:[{binding:0,resource:{buffer:beaconBuf}}]});
-    const waveBG = device.createBindGroup({layout:waveBGLayout,
-      entries:[{binding:0,resource:{buffer:waveBuf}}]});
-    const rBG_A=device.createBindGroup({layout:rBGLayout,
-      entries:[{binding:0,resource:{buffer:bufA}}]});
-    const rBG_B=device.createBindGroup({layout:rBGLayout,
-      entries:[{binding:0,resource:{buffer:bufB}}]});
+    /******************** SECTION 1E ─ SIM LOOP *************************/
+    const ctx=canvas.getContext('webgpu'); ctx.configure({device,format:navigator.gpu.getPreferredCanvasFormat(),alphaMode:'opaque'});
+    const compBG_A=device.createBindGroup({layout:cBGLayout,entries:[{binding:0,resource:{buffer:bufA}},{binding:1,resource:{buffer:bufB}},{binding:2,resource:{buffer:fBuf}}]});
+    const compBG_B=device.createBindGroup({layout:cBGLayout,entries:[{binding:0,resource:{buffer:bufB}},{binding:1,resource:{buffer:bufA}},{binding:2,resource:{buffer:fBuf}}]});
+    const simBG=device.createBindGroup({layout:uBGLayout,entries:[{binding:0,resource:{buffer:uBuf}}]});
+    const beaconBG=device.createBindGroup({layout:bBGLayout,entries:[{binding:0,resource:{buffer:beaconBuf}}]});
+    const waveBG=device.createBindGroup({layout:waveBGLayout,entries:[{binding:0,resource:{buffer:waveBuf}}]});
+    const rBG_A=device.createBindGroup({layout:rBGLayout,entries:[{binding:0,resource:{buffer:bufA}}]});
+    const rBG_B=device.createBindGroup({layout:rBGLayout,entries:[{binding:0,resource:{buffer:bufB}}]});
 
-    let flip=false;
-    function frame(){
-      simTime+=simParams.dt; updUniform(beaconCount);
-      const enc=device.createCommandEncoder();
+    let flip=false; 
+    function frame(){ 
+      simTime+=simParams.dt; 
 
-      const cp=enc.beginComputePass();
-      cp.setPipeline(compPipe);
-      cp.setBindGroup(0,flip?compBG_B:compBG_A);
-      cp.setBindGroup(1,simBG);
-      cp.setBindGroup(2,beaconBG);
-      cp.setBindGroup(3,waveBG);
-      cp.dispatchWorkgroups(Math.ceil(particleCount/256));
-      cp.end();
+    {
+      let audioDirty = false;
+      const tmp = new Float32Array(WAVE_LEN);
 
-      const rp=enc.beginRenderPass({colorAttachments:[{
-        view:ctx.getCurrentTexture().createView(),
-        loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:1}}]});
-      rp.setPipeline(rPipe);
-      rp.setBindGroup(0,flip?rBG_A:rBG_B);
-      rp.draw(particleCount); rp.end();
+      for (let k = 0; k < beaconCount; ++k) {
+        const ana = audioAnalysers[k];
+        if (!ana) continue;
 
-      queue.submit([enc.finish()]);
-      drawOverlay();
-      flip=!flip; requestAnimationFrame(frame);
-    }
-    requestAnimationFrame(frame);
-    /* ****************************************************************** */
-  } //  ← end startSim
+        ana.getFloatTimeDomainData(tmp);           // -1 … 1
+        const base = k * WAVE_LEN;
+        for (let j = 0; j < WAVE_LEN; ++j) {
+          waveArr[base + j] = tmp[j];
+        }
+        audioDirty = true;
+      }
+      if (audioDirty) uploadWaves();               // one  256 × #beacons  DMA
+    }      
+      updUniform(beaconCount); 
+      const enc=device.createCommandEncoder(); 
+      const cp=enc.beginComputePass(); 
+      cp.setPipeline(compPipe); 
+      cp.setBindGroup(0,flip?compBG_B:compBG_A); 
+      cp.setBindGroup(1,simBG); 
+      cp.setBindGroup(2,beaconBG); 
+      cp.setBindGroup(3,waveBG); 
+      cp.dispatchWorkgroups(Math.ceil(particleCount/256)); 
+      cp.end(); 
+      const rp=enc.beginRenderPass({colorAttachments:[{view:ctx.getCurrentTexture().createView(),loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:1}}]}); 
+      rp.setPipeline(rPipe); 
+      rp.setBindGroup(0,flip?rBG_A:rBG_B); 
+      rp.draw(particleCount); 
+      rp.end(); 
+      queue.submit([enc.finish()]); 
+      drawOverlay(); flip=!flip; 
+      requestAnimationFrame(frame);} 
+      requestAnimationFrame(frame);
+  }
   </script>
 </body>
 </html>
