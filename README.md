@@ -30,24 +30,25 @@ Use it when you want to:
 4. Open **World Forge** to generate a reproducible environment from a seed, or build a Forge Lane for a longer unattended run.
 5. Open **Auto-Discovery** to review its adjustments. It is enabled by default in this branch and makes conservative changes after enough generation history has accumulated.
 
-## Also recommended: Alien Nursery Forge
+## Also recommended: Alien Cockpit
 
-[`xenospecies_swarm_alien_nursery_forge_fixed.html`](xenospecies_swarm_alien_nursery_forge_fixed.html) is a more direct, consolidated version of the same evolutionary simulation. It is a good choice for hands-on environment design and for learning the model without the chamber-oriented layout.
+[`particle_audio_polygon_alien_cockpit_relinked.html`](particle_audio_polygon_alien_cockpit_relinked.html) is the audio-reactive particle-beam branch. It is the best choice for live visual experimentation with beacons, wave fields, force relationships, and the direct Morph Membrane controller.
 
 Its main capabilities are:
 
-- A procedural World Forge with behavior targets, controlled complexity/fairness, terrain geometry, seeds, and outcome heatmaps.
-- A Nursery Forge editor for a custom canvas: place, move, and erase food wells, goal regions, hazards, and barriers; choose circular or polygonal glyph shapes.
-- Species selection, chemistry evolution, neural-controller inspection, pheromone fields, gravity, analytics, champions, agent reports, and experiment import/export.
-- A prescribed curriculum lane that can advance through increasingly difficult environments.
+- An audio-reactive beacon system: add beacons directly, then drive their wave pressure from CSV data, audio files, or microphone input.
+- A live force matrix for inspecting and editing kind-to-kind attraction/repulsion relationships.
+- A Morph Membrane for broad, two-axis steering between order/chaos and calm/energy.
+- A chamber-style cockpit with live controls, organism experiments, workspace controls, telemetry, guidance, keyboard shortcuts, and an expert `lil-gui` panel.
 
-Choose this version when manual nursery construction matters more than reorganizable workspaces, a generated multi-lesson Forge Lane, or the specialized brain/force chambers.
+Choose this version for immediate audiovisual particle experiments rather than population evolution, curricula, or custom ecological nurseries.
 
 ## Version Guide
 
 | Version | Best for |
 | --- | --- |
 | [`xenospecies_swarm_hierarchical_force_chambers.html`](xenospecies_swarm_hierarchical_force_chambers.html) | Current default; full chamber workspace, force-matrix and brain inspection, editable/generated curricula, and automated discovery. |
+| [`particle_audio_polygon_alien_cockpit_relinked.html`](particle_audio_polygon_alien_cockpit_relinked.html) | Audio-reactive beacon and force-field particle simulation with a modern cockpit and Morph Membrane. |
 | [`xenospecies_swarm_alien_nursery_forge_fixed.html`](xenospecies_swarm_alien_nursery_forge_fixed.html) | Consolidated evolutionary sandbox with a strong custom Nursery Forge editor. |
 | [`xenospecies_swarm_auto_forge_editable_curriculum.html`](xenospecies_swarm_auto_forge_editable_curriculum.html) | Earlier editable hand curriculum plus generated Auto Forge Lane. |
 | [`xenospecies_swarm_cognitive_matrix_lab.html`](xenospecies_swarm_cognitive_matrix_lab.html) | Expanded cognitive and force-matrix lab with detailed species analysis. |
@@ -57,7 +58,6 @@ Choose this version when manual nursery construction matters more than reorganiz
 | [`xenospecies_swarm_research_lab.html`](xenospecies_swarm_research_lab.html) | Earlier general-purpose swarm research interface. |
 | [`xenospecies_swarm_chemistry_physics_lab.html`](xenospecies_swarm_chemistry_physics_lab.html) | Focused force-chemistry and particle-physics prototype. |
 | [`xenocell_genesis_environments.html`](xenocell_genesis_environments.html) | Separate Xenocell environment experiment. |
-| [`particle_audio_polygon_alien_cockpit_relinked.html`](particle_audio_polygon_alien_cockpit_relinked.html) | Particle simulation with audio-reactive beacons and an alternate cockpit UI. |
 
 ## Concepts
 
